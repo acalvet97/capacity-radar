@@ -49,7 +49,10 @@ Create a `.env.local` file in the root directory:
 ```env
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 ```
+
+The service role key is required for server-side mutations (e.g. updating team settings). Find it in Supabase Dashboard → Project Settings → API.
 
 4. Set up the database schema:
 Ensure your Supabase database has the following tables:

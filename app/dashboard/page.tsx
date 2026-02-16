@@ -11,6 +11,8 @@ import { getWorkItemsForTeam } from "@/lib/db/getWorkItemsForTeam";
 import { WorkItemsList } from "./workItemsList";
 
 import { DashboardViewSelector, type ViewKey } from "@/components/dashboard/DashboardViewSelector";
+import { CardTitleWithTooltip } from "@/components/dashboard/CardTitleWithTooltip";
+import { PeakLoadLabel } from "@/components/dashboard/PeakLoadLabel";
 import {
   todayYmdInTz,
   ymdToUtcDate,
@@ -158,22 +160,17 @@ export default async function DashboardPage({
       : "6 months";
 
   return (
-    <main className="mx-auto max-w-6xl p-6 space-y-6">
-      <header className="space-y-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Shows how much of your team&apos;s capacity is already committed in this window.
-          </p>
-        </div>
+    <main className="mx-auto max-w-6xl p-6 space-y-10">
+      <header className="space-y-4 mb-10">
+        <h1 className="text-3xl font-semibold tracking-tight">Dashboard</h1>
         <div className="flex items-center gap-3">
-          <span className="text-sm font-medium text-foreground">View window:</span>
+          <span className="text-sm font-medium text-foreground">View</span>
           <DashboardViewSelector view={view} horizonHint={horizonHint} />
         </div>
       </header>
 
       {/* KPIs — Risk first, context second. 4-col: primary 2, others 1 each. */}
-      <section className="grid gap-4 md:grid-cols-4">
+      <section className="grid gap-4 md:grid-cols-4" aria-label="Overview">
         {/* Tier 1: Primary — Max Utilization + Exposure (2 cols) */}
         <Card className="rounded-md md:col-span-2">
           <CardContent className="pt-4 pb-4">
@@ -182,12 +179,7 @@ export default async function DashboardPage({
                 <div className="text-3xl font-semibold tracking-tight">
                   {snapshot.maxUtilizationPct}%
                 </div>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Highest weekly load in this window
-                </p>
-                <p className="mt-0.5 text-xs text-muted-foreground/80">
-                  (This is where your team is most constrained.)
-                </p>
+                <PeakLoadLabel />
               </div>
               <Badge
                 variant="outline"
@@ -203,52 +195,58 @@ export default async function DashboardPage({
         {/* Tier 2: Committed (1 col) */}
         <Card className="rounded-md">
           <CardHeader className="pb-1">
-            <CardTitle className="text-xs font-medium text-muted-foreground">
-              Committed
-            </CardTitle>
+            <CardTitleWithTooltip
+              title="Committed"
+              tooltip={snapshot.bufferHoursPerWeek > 0 ? `Includes ${snapshot.bufferHoursPerWeek}h/week buffer.` : undefined}
+              className="text-xs font-medium text-muted-foreground"
+            />
           </CardHeader>
           <CardContent className="space-y-0.5">
             <div className="text-xl font-semibold tracking-tight">
               {snapshot.totalCommittedHours}h / {snapshot.totalCapacityHours}h
             </div>
             <p className="text-xs text-muted-foreground">
-              {snapshot.overallUtilizationPct}% of capacity in view
+              {snapshot.overallUtilizationPct}%
             </p>
           </CardContent>
         </Card>
 
-        {/* Tier 2: Weeks Equivalent (1 col) */}
+        {/* Tier 2: Weeks (1 col) */}
         <Card className="rounded-md">
           <CardHeader className="pb-1">
-            <CardTitle className="text-xs font-medium text-muted-foreground">
-              Weeks Equivalent
-            </CardTitle>
+            <CardTitleWithTooltip
+              title="Weeks"
+              tooltip="Total committed expressed as weeks of team capacity."
+              className="text-xs font-medium text-muted-foreground"
+            />
           </CardHeader>
           <CardContent className="space-y-0.5">
             <div className="text-xl font-semibold tracking-tight">
               {snapshot.weeksEquivalent}w
             </div>
-            <p className="text-xs text-muted-foreground">
-              Total committed expressed as weeks of team capacity
-            </p>
           </CardContent>
         </Card>
       </section>
 
       {/* Horizon + At-risk */}
-      <section className="grid gap-4 md:grid-cols-3">
+      <section className="grid gap-4 md:grid-cols-3 pt-4">
         <div className="md:col-span-2">
           <Card className="rounded-md">
             <CardHeader>
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Capacity Horizon ({viewLabel})
-              </CardTitle>
+              <h2 className="text-base font-semibold">Capacity ({viewLabel})</h2>
             </CardHeader>
             <CardContent className="space-y-4">
               {horizonWeeksForView.map((week) => {
                 const utilization = Math.round((week.committedHours / week.capacityHours) * 100);
                 const bucket = bucketFromUtilization(utilization);
-                const fillWidth = Math.min(utilization, 100);
+                const buffer = snapshot.bufferHoursPerWeek;
+                const workHours = Math.max(0, week.committedHours - buffer);
+                const bufferPct = week.capacityHours > 0
+                  ? Math.min(100, (buffer / week.capacityHours) * 100)
+                  : 0;
+                const workPct = week.capacityHours > 0
+                  ? Math.min(100 - bufferPct, (workHours / week.capacityHours) * 100)
+                  : 0;
 
                 return (
                   <div key={week.weekStartYmd} className="space-y-2">
@@ -277,10 +275,17 @@ export default async function DashboardPage({
                       </div>
                     </div>
 
-                    <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
+                    <div className="h-2 w-full rounded-full bg-muted overflow-hidden flex">
+                      {buffer > 0 && bufferPct > 0 && (
+                        <div
+                          className="h-full bg-slate-400/40 shrink-0"
+                          style={{ width: `${bufferPct}%` }}
+                          title="Structural buffer"
+                        />
+                      )}
                       <div
-                        className={`h-full ${barFill[bucket]}`}
-                        style={{ width: `${fillWidth}%` }}
+                        className={`h-full shrink-0 ${barFill[bucket]}`}
+                        style={{ width: `${workPct}%` }}
                       />
                     </div>
                   </div>
@@ -293,9 +298,12 @@ export default async function DashboardPage({
         <div>
           <Card className="rounded-md">
             <CardHeader>
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                At Risk Weeks
-              </CardTitle>
+              <CardTitleWithTooltip
+                title="At risk"
+                tooltip="Weeks above 90% utilization."
+                as="h2"
+                className="text-base font-semibold"
+              />
             </CardHeader>
             <CardContent className="space-y-2">
               {atRiskWeeks.length > 0 ? (
@@ -308,14 +316,14 @@ export default async function DashboardPage({
                   </div>
                 ))
               ) : (
-                <p className="text-sm text-muted-foreground">No weeks above 90% utilization.</p>
+                <p className="text-sm text-muted-foreground">None</p>
               )}
             </CardContent>
           </Card>
         </div>
       </section>
 
-      <section className="grid gap-4 md:grid-cols-1">
+      <section className="pt-4">
         <WorkItemsList teamId={MVP_TEAM_ID} items={workItems} />
       </section>
     </main>

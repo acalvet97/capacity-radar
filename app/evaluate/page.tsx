@@ -92,12 +92,9 @@ export default async function EvaluatePage({
   const viewBefore = recomputeSnapshot(before, before.horizonWeeks.slice(0, weeks));
 
   return (
-    <main className="mx-auto max-w-6xl p-6 space-y-6">
-      <header className="space-y-1">
-        <h1 className="text-2xl font-semibold tracking-tight">Evaluate New Work</h1>
-        <p className="text-sm text-muted-foreground">
-          Live simulation based on your current plan. Commit work to include it.
-        </p>
+    <main className="mx-auto max-w-6xl p-6 space-y-10">
+      <header className="mb-10">
+        <h1 className="text-3xl font-semibold tracking-tight">Evaluate</h1>
       </header>
 
       {/* remount on view changes */}

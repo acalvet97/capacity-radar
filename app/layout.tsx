@@ -3,6 +3,7 @@ import { Instrument_Sans } from "next/font/google";
 import "./globals.css";
 import { Navbar } from "@/components/layout/navbar";
 import { Toaster } from "@/components/ui/sonner";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 
 const instrumentSans = Instrument_Sans({
@@ -20,9 +21,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body className={`${instrumentSans.variable} min-h-screen bg-background antialiased font-sans`}>
-        <Navbar />
-        {children}
-        <Toaster />
+        <TooltipProvider>
+          <Navbar />
+          {children}
+          <Toaster />
+        </TooltipProvider>
       </body>
     </html>
   );

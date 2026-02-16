@@ -17,6 +17,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { InfoTooltip } from "@/components/ui/InfoTooltip";
+import { CollapsibleHelp } from "@/components/ui/CollapsibleHelp";
 
 import type { DashboardSnapshot } from "@/lib/dashboardEngine";
 import { formatDateDdMmYyyy } from "@/lib/dates";
@@ -117,22 +119,10 @@ export function EvaluateClient({ before, view }: { before: DashboardSnapshot; vi
     const nextView = viewForNeededWeeks(neededWeeks);
 
     if (nextView !== view) {
-      toast.message("View expanded to include deadline", {
-        description: `Switched to ${
-          nextView === "6m"
-            ? "6 months"
-            : nextView === "quarter"
-            ? "Current Quarter"
-            : nextView === "12w"
-            ? "Next 12 weeks"
-            : "Next 4 weeks"
-        }.`,
-      });
+      toast.message("View expanded to include deadline");
       setViewInUrl(nextView);
     } else if (nextView === "6m" && neededWeeks > 26) {
-      toast.message("Deadline exceeds 6-month view cap", {
-        description: "View is capped at 6 months for MVP; impact beyond that isn’t shown yet.",
-      });
+      toast.message("Deadline beyond 6-month view");
     }
   }
 
@@ -165,11 +155,11 @@ export function EvaluateClient({ before, view }: { before: DashboardSnapshot; vi
       : "6 months";
 
   return (
-    <section className="grid gap-4 md:grid-cols-3">
+    <section className="grid gap-8 md:grid-cols-3">
       <div>
         <Card className="rounded-md">
           <CardHeader>
-            <CardTitle className="text-sm font-medium text-muted-foreground">Inputs</CardTitle>
+            <h2 className="text-base font-semibold">Inputs</h2>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
@@ -264,7 +254,7 @@ export function EvaluateClient({ before, view }: { before: DashboardSnapshot; vi
                       onChange={(e) => setAllocationMode(e.target.value as "even" | "fill_capacity")}
                       className="h-4 w-4 border border-input text-primary focus:ring-2 focus:ring-ring"
                     />
-                    <span className="text-sm">Capacity-aware (default)</span>
+                    <span className="text-sm">Fill capacity</span>
                   </label>
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input
@@ -275,9 +265,13 @@ export function EvaluateClient({ before, view }: { before: DashboardSnapshot; vi
                       onChange={(e) => setAllocationMode(e.target.value as "even" | "fill_capacity")}
                       className="h-4 w-4 border border-input text-primary focus:ring-2 focus:ring-ring"
                     />
-                    <span className="text-sm">Even spread (simulation)</span>
+                    <span className="text-sm">Even spread</span>
                   </label>
                 </div>
+                <CollapsibleHelp>
+                  <p><strong>Fill capacity:</strong> Uses remaining capacity each week. Fits work into open slots and respects limits. Best for realistic planning.</p>
+                  <p><strong>Even spread:</strong> Distributes hours evenly across the range. Ignores capacity—use for rough estimates or simulation.</p>
+                </CollapsibleHelp>
               </div>
             </div>
 
@@ -305,9 +299,7 @@ export function EvaluateClient({ before, view }: { before: DashboardSnapshot; vi
                       allocationMode,
                     });
 
-                    toast.success("Work committed", {
-                      description: `Saved as ${res.id.slice(0, 8)}…`,
-                    });
+                    toast.success("Work committed");
 
                     router.refresh();
                     setHours("");
@@ -322,9 +314,6 @@ export function EvaluateClient({ before, view }: { before: DashboardSnapshot; vi
               {isPending ? "Committing…" : "Commit work"}
             </Button>
 
-            <p className="text-xs text-muted-foreground">
-              Committing writes this work item to the database (so it affects future snapshots).
-            </p>
           </CardContent>
         </Card>
       </div>
@@ -333,58 +322,25 @@ export function EvaluateClient({ before, view }: { before: DashboardSnapshot; vi
       <div className="md:col-span-2">
         <Card className="rounded-md">
           <CardHeader>
-            <CardTitle className="text-sm font-medium text-muted-foreground">Impact</CardTitle>
+            <h2 className="text-base font-semibold">Simulation result</h2>
           </CardHeader>
-          <CardContent className="space-y-5">
+          <CardContent className="space-y-6">
             {!result ? (
               <p className="text-sm text-muted-foreground">
-                Enter hours and dates to see impact across the current view.
+                Enter hours and dates to see impact.
               </p>
             ) : (
               <>
-                {/* Before → After quick deltas */}
-                <div className="grid gap-2 rounded-md border p-3 text-sm">
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Committed</span>
-                    <span className="font-medium">
-                      {result.before.totalCommittedHours}h → {result.after.totalCommittedHours}h
-                      <span className="text-muted-foreground">
-                        {" "}
-                        (+{result.deltas.totalCommittedHours}h)
-                      </span>
-                    </span>
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Overall utilization</span>
-                    <span className="font-medium">
-                      {result.before.overallUtilizationPct}% → {result.after.overallUtilizationPct}%
-                      <span className="text-muted-foreground">
-                        {" "}
-                        (+{result.deltas.overallUtilizationPct})
-                      </span>
-                    </span>
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Max utilization</span>
-                    <span className="font-medium">
-                      {result.before.maxUtilizationPct}% → {result.after.maxUtilizationPct}%
-                      <span className="text-muted-foreground">
-                        {" "}
-                        (+{result.deltas.maxUtilizationPct})
-                      </span>
-                    </span>
-                  </div>
-                </div>
-
                 {/* Summary cards */}
                 <div className="grid gap-4 md:grid-cols-3">
                   <Card className="rounded-md">
                     <CardHeader className="pb-2">
-                      <CardTitle className="text-xs font-medium text-muted-foreground">
-                        Exposure
-                      </CardTitle>
+                      <div className="flex items-center gap-1.5">
+                        <CardTitle className="text-xs font-medium text-muted-foreground">
+                          Exposure
+                        </CardTitle>
+                        <InfoTooltip content="Based on highest weekly utilization in this view." />
+                      </div>
                     </CardHeader>
                     <CardContent className="flex items-center justify-between">
                       <div className="text-lg font-semibold">
@@ -401,9 +357,14 @@ export function EvaluateClient({ before, view }: { before: DashboardSnapshot; vi
 
                   <Card className="rounded-md">
                     <CardHeader className="pb-2">
-                      <CardTitle className="text-xs font-medium text-muted-foreground">
-                        Committed
-                      </CardTitle>
+                      <div className="flex items-center gap-1.5">
+                        <CardTitle className="text-xs font-medium text-muted-foreground">
+                          Committed
+                        </CardTitle>
+                        {result.after.bufferHoursPerWeek > 0 && (
+                          <InfoTooltip content={`Total includes ${result.after.bufferHoursPerWeek}h/week buffer.`} />
+                        )}
+                      </div>
                     </CardHeader>
                     <CardContent className="space-y-1">
                       <div className="text-lg font-semibold">
@@ -420,20 +381,27 @@ export function EvaluateClient({ before, view }: { before: DashboardSnapshot; vi
 
                   <Card className="rounded-md">
                     <CardHeader className="pb-2">
-                      <CardTitle className="text-xs font-medium text-muted-foreground">
-                        Applied
-                      </CardTitle>
+                      <div className="flex items-center gap-1.5">
+                        <CardTitle className="text-xs font-medium text-muted-foreground">
+                          Distribution
+                        </CardTitle>
+                        {result.applied.allocationMode === "fill_capacity" && (
+                          <InfoTooltip content="Allocation capped by weekly capacity." />
+                        )}
+                      </div>
                     </CardHeader>
                     <CardContent className="space-y-1">
-                      <div className="text-lg font-semibold">{result.applied.weekRangeLabel}</div>
+                      <div className="text-lg font-semibold">
+                        {formatDateDdMmYyyy(result.before.horizonWeeks[result.applied.startIdx].weekStartYmd)} → {formatDateDdMmYyyy(result.before.horizonWeeks[result.applied.endIdx].weekEndYmd)}
+                      </div>
                       <div className="text-xs text-muted-foreground">
                         {result.applied.allocationMode === "even" ? (
                           <>
-                            {result.applied.perWeekHours}h / week ({result.applied.weeksCount} weeks)
+                            {result.applied.perWeekHours}h/week · {result.applied.weeksCount} weeks
                           </>
                         ) : (
                           <>
-                            Allocated across {result.applied.weeksCount} week{result.applied.weeksCount !== 1 ? "s" : ""} (capacity-capped)
+                            {result.applied.weeksCount} week{result.applied.weeksCount !== 1 ? "s" : ""}
                           </>
                         )}
                       </div>
@@ -442,8 +410,8 @@ export function EvaluateClient({ before, view }: { before: DashboardSnapshot; vi
                 </div>
 
                 {/* Week-by-week */}
-                <div className="space-y-3">
-                  <h3 className="text-sm font-medium">Week-by-week impact</h3>
+                <div className="space-y-3 pt-6 mt-6 border-t">
+                  <h3 className="text-sm font-medium text-muted-foreground">Weekly impact</h3>
 
                   <div className="space-y-4">
                     {result.after.horizonWeeks.map((afterWeek, idx) => {
@@ -457,39 +425,38 @@ export function EvaluateClient({ before, view }: { before: DashboardSnapshot; vi
                       );
 
                       const afterBucket = bucketFromUtilization(afterPct);
-                      const fillWidth = Math.min(afterPct, 100);
+                      const buffer = result.after.bufferHoursPerWeek;
+                      const workHours = Math.max(0, afterWeek.committedHours - buffer);
+                      const bufferPct = afterWeek.capacityHours > 0
+                        ? Math.min(100, (buffer / afterWeek.capacityHours) * 100)
+                        : 0;
+                      const workPct = afterWeek.capacityHours > 0
+                        ? Math.min(100 - bufferPct, (workHours / afterWeek.capacityHours) * 100)
+                        : Math.min(afterPct, 100);
 
                       return (
                         <div key={afterWeek.weekStartYmd} className="space-y-2">
                           <div className="flex items-center justify-between gap-4 text-sm">
-                            <div className="min-w-0">
-                              <div className="font-medium">{afterWeek.weekLabel}</div>
-                              <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                                <span>
-                                  <span className="font-medium text-foreground">
-                                    {Math.round(afterWeek.committedHours)}h / {Math.round(afterWeek.capacityHours)}h
-                                  </span>{" "}
-                                  committed
-                                </span>
-                                <span>
-                                  <span className="font-medium text-foreground">
-                                    {beforePct}% → {afterPct}%
-                                  </span>{" "}
-                                  utilization
-                                </span>
-                                {afterPct > 100 && (
-                                  <span className="text-red-600">
-                                    +{afterPct - 100}% over capacity
-                                  </span>
-                                )}
-                              </div>
+                            <div className="font-medium">{afterWeek.weekLabel}</div>
+                            <div className="text-xs tabular-nums">
+                              {beforePct}% → {afterPct}%
+                              {afterPct > 100 && (
+                                <span className="text-red-600"> 🔴 +{afterPct - 100}%</span>
+                              )}
                             </div>
                           </div>
 
-                          <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
+                          <div className="h-2 w-full rounded-full bg-muted overflow-hidden flex">
+                            {buffer > 0 && bufferPct > 0 && (
+                              <div
+                                className="h-full bg-slate-400/40 shrink-0"
+                                style={{ width: `${bufferPct}%` }}
+                                title="Structural buffer"
+                              />
+                            )}
                             <div
-                              className={`h-full ${barFill[afterBucket]}`}
-                              style={{ width: `${fillWidth}%` }}
+                              className={`h-full shrink-0 ${barFill[afterBucket]}`}
+                              style={{ width: `${workPct}%` }}
                             />
                           </div>
                         </div>

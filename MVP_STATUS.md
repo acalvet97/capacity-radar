@@ -87,6 +87,7 @@
 - `cycle_start_date`
 - `cycle_end_date`
 - `owner_user_id`
+- `buffer_hours_per_week` (INTEGER NOT NULL DEFAULT 0) — weekly structural buffer; counts as committed
 
 ### `team_members`
 - `id`
@@ -194,6 +195,7 @@ All priorities from `NEXT_STEPS.md` completed:
 ```env
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 ```
 
 ---

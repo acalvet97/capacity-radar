@@ -98,14 +98,12 @@ export function WorkItemsList(props: { teamId: string; items: WorkItemRow[] }) {
   return (
     <Card className="rounded-md">
       <CardHeader>
-        <CardTitle className="text-sm font-medium text-muted-foreground">
-          Committed workload
-        </CardTitle>
+        <h2 className="text-base font-semibold">Committed work</h2>
       </CardHeader>
 
       <CardContent className="space-y-3">
         {items.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No committed work yet.</p>
+          <p className="text-sm text-muted-foreground">None</p>
         ) : (
           <div className="space-y-2">
             {items.map((it) => {

@@ -20,6 +20,8 @@ export type DashboardSnapshot = {
   weeksEquivalent: number;
   maxUtilizationPct: number;
   exposureBucket: Bucket;
+  /** Weekly structural buffer (hours). Counts as committed. */
+  bufferHoursPerWeek: number;
 };
 
 export type HorizonOptions = {
@@ -143,14 +145,15 @@ export async function getDashboardSnapshotFromDb(
 ): Promise<DashboardSnapshot> {
   const supabase = supabaseServer();
 
-  // Keep minimal team fetch (not used for horizon anymore; safe to remove later)
-  const { error: teamErr } = await supabase
+  const { data: teamRow, error: teamErr } = await supabase
     .from("teams")
-    .select("id")
+    .select("id, buffer_hours_per_week")
     .eq("id", teamId)
     .single();
 
   if (teamErr) throw new Error(teamErr.message);
+
+  const bufferHoursPerWeek = Math.max(0, Number(teamRow?.buffer_hours_per_week ?? 0) || 0);
 
   const tz = options.tz ?? "Europe/Madrid";
   const locale = options.locale ?? "en-GB";
@@ -187,6 +190,14 @@ export async function getDashboardSnapshotFromDb(
     weeklyCapacity,
     locale,
   });
+
+  // 2b) Add structural buffer to every week (pre-committed load)
+  for (let i = 0; i < horizonWeeks.length; i++) {
+    horizonWeeks[i] = {
+      ...horizonWeeks[i],
+      committedHours: round1(horizonWeeks[i].committedHours + bufferHoursPerWeek),
+    };
+  }
 
   // 3) Load work items
   const { data: workItems, error: wiErr } = await supabase
@@ -307,5 +318,6 @@ export async function getDashboardSnapshotFromDb(
     maxUtilizationPct,
     exposureBucket: bucketFromUtil(maxUtilizationPct),
     weeksEquivalent,
+    bufferHoursPerWeek,
   };
 }
