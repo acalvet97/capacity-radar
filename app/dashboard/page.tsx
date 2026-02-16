@@ -61,8 +61,7 @@ function weeksBetweenIsoWeeksInclusive(startYmd: string, endYmd: string): number
 
 function lastDayOfMonthYmd(todayYmd: string): string {
   const [yy, mm] = todayYmd.split("-").map(Number);
-  // day 0 of next month = last day of current month
-  const last = new Date(Date.UTC(yy, mm, 0));
+  const last = new Date(Date.UTC(yy, mm, 0)); // day 0 of next month
   return utcDateToYmd(last);
 }
 
@@ -72,9 +71,7 @@ function weeksForView(view: ViewKey, todayYmd: string): number {
   if (view === "quarter") return 13;
   if (view === "6m") return 26;
 
-  // Current month view:
-  // from today to last day of month, but we render weekly buckets,
-  // so we include all ISO weeks until the ISO week containing month-end.
+  // month: from today to month-end, but include all ISO weeks up to the week containing month-end
   const monthEndYmd = lastDayOfMonthYmd(todayYmd);
   const endSunday = endOfIsoWeekUtc(ymdToUtcDate(monthEndYmd));
   const endSundayYmd = utcDateToYmd(endSunday);
@@ -89,13 +86,12 @@ export default async function DashboardPage({
 }) {
   const view = normalizeView(searchParams?.view);
   const todayYmd = todayYmdInTz("Europe/Madrid");
-
   const weeks = weeksForView(view, todayYmd);
 
   const snapshot = await getDashboardSnapshotFromDb(MVP_TEAM_ID, {
     startYmd: todayYmd,
     weeks,
-    maxWeeks: 26, // MVP cap = 6 months
+    maxWeeks: 26,
     locale: "en-GB",
     tz: "Europe/Madrid",
   });

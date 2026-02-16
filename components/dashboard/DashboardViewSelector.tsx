@@ -1,8 +1,6 @@
-// components/dashboard/DashboardViewSelector.tsx
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -28,7 +26,7 @@ export function DashboardViewSelector({
     const params = new URLSearchParams(searchParams?.toString());
     params.set("view", nextView);
     router.replace(`?${params.toString()}`);
-    router.refresh(); // ✅ forces server refetch of snapshot
+    router.refresh(); // ✅ makes the server page refetch snapshot
   }
 
   const viewLabel =
@@ -58,9 +56,11 @@ export function DashboardViewSelector({
         </SelectContent>
       </Select>
 
-      <p className="text-xs text-muted-foreground">
-        {viewLabel}: {horizonHint}
-      </p>
+      {horizonHint ? (
+        <p className="text-xs text-muted-foreground">
+          {viewLabel}: {horizonHint}
+        </p>
+      ) : null}
     </div>
   );
 }

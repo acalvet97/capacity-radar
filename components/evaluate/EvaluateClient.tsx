@@ -103,7 +103,7 @@ export function EvaluateClient({ before, view }: { before: DashboardSnapshot; vi
     const params = new URLSearchParams(searchParams?.toString());
     params.set("view", nextView);
     router.replace(`?${params.toString()}`);
-    router.refresh(); // ✅ IMPORTANT: refetch server snapshot
+    router.refresh(); // ✅
   }
 
   const input: NewWorkInput = {
