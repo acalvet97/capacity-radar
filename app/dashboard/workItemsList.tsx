@@ -98,7 +98,7 @@ export function WorkItemsList(props: { teamId: string; items: WorkItemRow[] }) {
   }
 
   return (
-    <Card className="rounded-2xl">
+    <Card className="rounded-md">
       <CardHeader>
         <CardTitle className="text-sm font-medium text-muted-foreground">
           Committed Work
@@ -117,7 +117,7 @@ export function WorkItemsList(props: { teamId: string; items: WorkItemRow[] }) {
               return (
                 <div
                   key={it.id}
-                  className="space-y-2 rounded-xl border p-3"
+                  className="space-y-2 rounded-md border p-3"
                 >
                   {!isEditing ? (
                     <div className="flex items-center justify-between gap-4">

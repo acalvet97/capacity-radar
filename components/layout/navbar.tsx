@@ -14,7 +14,7 @@ export function Navbar() {
   const pathname = usePathname();
 
   return (
-    <header className="border-b bg-background">
+    <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="mx-auto flex max-w-6xl items-center justify-between p-4">
         <Link
           href="/dashboard"
@@ -31,7 +31,7 @@ export function Navbar() {
               <Link key={item.href} href={item.href}>
                 <Button
                   variant={isActive ? "default" : "ghost"}
-                  className={cn("rounded-xl")}
+                  className={cn("rounded-md")}
                 >
                   {item.label}
                 </Button>

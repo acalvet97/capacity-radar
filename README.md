@@ -1,37 +1,89 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Capacity Radar
+
+A deterministic clarity engine for small service teams to visualize committed workload vs team capacity.
+
+Capacity Radar helps teams make data-driven decisions about accepting new work by showing exposure levels across a rolling time horizon. It is not a project management tool, task manager, or time tracking system—it's a system of operational clarity.
+
+## Features
+
+- **Dashboard**: View committed workload vs team capacity across configurable time windows
+- **Evaluate**: Simulate how new work changes exposure before committing it
+- **Work Management**: Create, edit, and delete work items with hours, start dates, and deadlines
+- **Deterministic Engine**: All calculations are reproducible from database state—no AI, no guessing
+
+## Tech Stack
+
+- **Framework**: Next.js 16 (App Router)
+- **Language**: TypeScript
+- **Database**: Supabase (PostgreSQL)
+- **Styling**: Tailwind CSS v4
+- **UI Components**: shadcn/ui
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
 
+- Node.js 20+ 
+- npm, yarn, pnpm, or bun
+- A Supabase project with the required schema
+
+### Installation
+
+1. Clone the repository:
+```bash
+git clone <repository-url>
+cd capacity-radar
+```
+
+2. Install dependencies:
+```bash
+npm install
+# or
+yarn install
+# or
+pnpm install
+```
+
+3. Set up environment variables:
+Create a `.env.local` file in the root directory:
+```env
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+```
+
+4. Set up the database schema:
+Ensure your Supabase database has the following tables:
+- `teams` (id, name, cycle_start_date, cycle_end_date, owner_user_id)
+- `team_members` (id, team_id, name, hours_per_cycle)
+- `work_items` (id, team_id, name, estimated_hours, start_date, deadline, created_at)
+
+5. Run the development server:
 ```bash
 npm run dev
 # or
 yarn dev
 # or
 pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+6. Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Project Structure
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- `/app` - Next.js app router pages and routes
+- `/components` - React components
+- `/lib` - Core business logic and utilities
+  - `dashboardEngine.ts` - Deterministic capacity calculation engine
+  - `evaluateEngine.ts` - Work simulation logic
+- `/lib/db` - Database query functions
 
-## Learn More
+## Development
 
-To learn more about Next.js, take a look at the following resources:
+- `npm run dev` - Start development server
+- `npm run build` - Build for production
+- `npm run start` - Start production server
+- `npm run lint` - Run ESLint
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## License
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
-# capacity-radar
+MIT License - see [LICENSE](LICENSE) file for details.

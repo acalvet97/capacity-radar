@@ -164,7 +164,7 @@ export function EvaluateClient({ before, view }: { before: DashboardSnapshot; vi
   return (
     <section className="grid gap-4 md:grid-cols-3">
       <div>
-        <Card className="rounded-2xl">
+        <Card className="rounded-md">
           <CardHeader>
             <CardTitle className="text-sm font-medium text-muted-foreground">Inputs</CardTitle>
           </CardHeader>
@@ -172,7 +172,7 @@ export function EvaluateClient({ before, view }: { before: DashboardSnapshot; vi
             <div className="space-y-2">
               <Label>View window</Label>
               <Select value={view} onValueChange={(v) => setViewInUrl(v as ViewKey)}>
-                <SelectTrigger className="rounded-xl">
+                <SelectTrigger className="rounded-md">
                   <SelectValue placeholder="Choose a view" />
                 </SelectTrigger>
                 <SelectContent>
@@ -193,78 +193,67 @@ export function EvaluateClient({ before, view }: { before: DashboardSnapshot; vi
 
             <Separator />
 
-            <div className="space-y-2">
-              <Label htmlFor="name">Work name</Label>
-              <Input id="name" value={name} onChange={(e) => setName(e.target.value)} />
-            </div>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="name">Work name</Label>
+                <Input id="name" value={name} onChange={(e) => setName(e.target.value)} />
+              </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="hours">Total hours</Label>
-              <Input
-                id="hours"
-                inputMode="numeric"
-                value={hours}
-                onChange={(e) => setHours(e.target.value)}
-              />
-              <p className="text-xs text-muted-foreground">
-                Distributed uniformly across the selected date range (weekly buckets).
-              </p>
-            </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="hours">Total hours</Label>
+                  <Input
+                    id="hours"
+                    inputMode="numeric"
+                    value={hours}
+                    onChange={(e) => setHours(e.target.value)}
+                  />
+                </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="startYmd">Start date</Label>
-              <Input
-                id="startYmd"
-                type="date"
-                value={startYmd}
-                onChange={(e) => setStartYmd(e.target.value)}
-              />
-            </div>
+                <div className="space-y-2">
+                  <Label htmlFor="startYmd">Start date</Label>
+                  <Input
+                    id="startYmd"
+                    type="date"
+                    value={startYmd}
+                    onChange={(e) => setStartYmd(e.target.value)}
+                  />
+                </div>
+              </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="deadlineYmd">Deadline date (optional)</Label>
-              <Input
-                id="deadlineYmd"
-                type="date"
-                value={deadlineYmd}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  setDeadlineYmd(v);
-                  maybeAutoExpandToDeadline(v);
-                }}
-              />
-              <div className="flex gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="rounded-xl"
-                  onClick={() => setDeadlineYmd("")}
-                  disabled={isPending || !deadlineYmd}
-                >
-                  Clear deadline
-                </Button>
-
-                {viewEnd ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="rounded-xl"
-                    onClick={() => {
-                      setDeadlineYmd(viewEnd);
-                      maybeAutoExpandToDeadline(viewEnd);
+              <div className="space-y-2">
+                <Label htmlFor="deadlineYmd">Deadline (optional)</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="deadlineYmd"
+                    type="date"
+                    value={deadlineYmd}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setDeadlineYmd(v);
+                      maybeAutoExpandToDeadline(v);
                     }}
-                    disabled={isPending}
-                  >
-                    Set to end of view
-                  </Button>
-                ) : null}
+                    className="flex-1"
+                  />
+                  {deadlineYmd && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="rounded-md"
+                      onClick={() => setDeadlineYmd("")}
+                      disabled={isPending}
+                    >
+                      Clear
+                    </Button>
+                  )}
+                </div>
               </div>
             </div>
 
             <Separator />
 
             <Button
-              className="w-full rounded-xl"
+              className="w-full rounded-md"
               type="button"
               disabled={
                 isPending ||
@@ -310,7 +299,7 @@ export function EvaluateClient({ before, view }: { before: DashboardSnapshot; vi
 
       {/* Results */}
       <div className="md:col-span-2">
-        <Card className="rounded-2xl">
+        <Card className="rounded-md">
           <CardHeader>
             <CardTitle className="text-sm font-medium text-muted-foreground">Impact</CardTitle>
           </CardHeader>
@@ -322,7 +311,7 @@ export function EvaluateClient({ before, view }: { before: DashboardSnapshot; vi
             ) : (
               <>
                 {/* Before → After quick deltas */}
-                <div className="grid gap-2 rounded-2xl border p-3 text-sm">
+                <div className="grid gap-2 rounded-md border p-3 text-sm">
                   <div className="flex items-center justify-between">
                     <span className="text-muted-foreground">Committed</span>
                     <span className="font-medium">
@@ -359,7 +348,7 @@ export function EvaluateClient({ before, view }: { before: DashboardSnapshot; vi
 
                 {/* Summary cards */}
                 <div className="grid gap-4 md:grid-cols-3">
-                  <Card className="rounded-2xl">
+                  <Card className="rounded-md">
                     <CardHeader className="pb-2">
                       <CardTitle className="text-xs font-medium text-muted-foreground">
                         Exposure
@@ -378,7 +367,7 @@ export function EvaluateClient({ before, view }: { before: DashboardSnapshot; vi
                     </CardContent>
                   </Card>
 
-                  <Card className="rounded-2xl">
+                  <Card className="rounded-md">
                     <CardHeader className="pb-2">
                       <CardTitle className="text-xs font-medium text-muted-foreground">
                         Committed
@@ -397,7 +386,7 @@ export function EvaluateClient({ before, view }: { before: DashboardSnapshot; vi
                     </CardContent>
                   </Card>
 
-                  <Card className="rounded-2xl">
+                  <Card className="rounded-md">
                     <CardHeader className="pb-2">
                       <CardTitle className="text-xs font-medium text-muted-foreground">
                         Applied
@@ -414,10 +403,7 @@ export function EvaluateClient({ before, view }: { before: DashboardSnapshot; vi
 
                 {/* Week-by-week */}
                 <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-medium">Week-by-week impact</h3>
-                    <p className="text-xs text-muted-foreground">Before → After (utilization)</p>
-                  </div>
+                  <h3 className="text-sm font-medium">Week-by-week impact</h3>
 
                   <div className="space-y-4">
                     {result.after.horizonWeeks.map((afterWeek, idx) => {
@@ -431,37 +417,40 @@ export function EvaluateClient({ before, view }: { before: DashboardSnapshot; vi
                       );
 
                       const afterBucket = bucketFromUtilization(afterPct);
+                      const fillWidth = Math.min(afterPct, 100);
 
                       return (
                         <div key={afterWeek.weekStartYmd} className="space-y-2">
-                          <div className="flex items-center justify-between text-sm">
-                            <span className="font-medium">
-                              {afterWeek.weekLabel}{" "}
-                              <span className="text-muted-foreground font-normal">
-                                ({afterWeek.weekStartYmd} → {afterWeek.weekEndYmd})
-                              </span>
-                            </span>
-                            <span className="text-muted-foreground">
-                              {beforePct}% → {afterPct}%
-                              {afterPct > 100 && (
-                                <span className="ml-2 text-xs text-red-600">
-                                  +{afterPct - 100}% over
+                          <div className="flex items-center justify-between gap-4 text-sm">
+                            <div className="min-w-0">
+                              <div className="font-medium">{afterWeek.weekLabel}</div>
+                              <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                                <span>
+                                  <span className="font-medium text-foreground">
+                                    {Math.round(afterWeek.committedHours)}h / {Math.round(afterWeek.capacityHours)}h
+                                  </span>{" "}
+                                  committed
                                 </span>
-                              )}
-                            </span>
+                                <span>
+                                  <span className="font-medium text-foreground">
+                                    {beforePct}% → {afterPct}%
+                                  </span>{" "}
+                                  utilization
+                                </span>
+                                {afterPct > 100 && (
+                                  <span className="text-red-600">
+                                    +{afterPct - 100}% over capacity
+                                  </span>
+                                )}
+                              </div>
+                            </div>
                           </div>
 
                           <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
                             <div
                               className={`h-full ${barFill[afterBucket]}`}
-                              style={{ width: `${Math.min(afterPct, 100)}%` }}
+                              style={{ width: `${fillWidth}%` }}
                             />
-                          </div>
-
-                          <div className="text-xs text-muted-foreground">
-                            {Math.round(beforeWeek.committedHours)}h →{" "}
-                            {Math.round(afterWeek.committedHours)}h (
-                            +{Math.max(0, Math.round(afterWeek.committedHours - beforeWeek.committedHours))}h)
                           </div>
                         </div>
                       );

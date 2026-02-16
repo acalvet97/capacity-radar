@@ -46,7 +46,7 @@ export function DashboardViewSelector({
     <div className="space-y-2">
       <Label>View window</Label>
       <Select value={view} onValueChange={(v) => setViewInUrl(v as ViewKey)}>
-        <SelectTrigger className="rounded-xl">
+        <SelectTrigger className="rounded-md">
           <SelectValue placeholder="Choose a view" />
         </SelectTrigger>
         <SelectContent>

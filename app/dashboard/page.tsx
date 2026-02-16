@@ -172,7 +172,7 @@ export default async function DashboardPage({
 
       {/* KPIs */}
       <section className="grid gap-4 md:grid-cols-4">
-        <Card className="rounded-2xl">
+        <Card className="rounded-md">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Exposure</CardTitle>
           </CardHeader>
@@ -190,7 +190,7 @@ export default async function DashboardPage({
           </CardContent>
         </Card>
 
-        <Card className="rounded-2xl">
+        <Card className="rounded-md">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
               Max Utilization
@@ -201,7 +201,7 @@ export default async function DashboardPage({
           </CardContent>
         </Card>
 
-        <Card className="rounded-2xl">
+        <Card className="rounded-md">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
               Committed Hours
@@ -212,7 +212,7 @@ export default async function DashboardPage({
           </CardContent>
         </Card>
 
-        <Card className="rounded-2xl">
+        <Card className="rounded-md">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
               Weeks Equivalent
@@ -227,7 +227,7 @@ export default async function DashboardPage({
       {/* Horizon + At-risk */}
       <section className="grid gap-4 md:grid-cols-3">
         <div className="md:col-span-2">
-          <Card className="rounded-2xl">
+          <Card className="rounded-md">
             <CardHeader>
               <CardTitle className="text-sm font-medium text-muted-foreground">
                 Capacity Horizon ({viewLabel})
@@ -280,7 +280,7 @@ export default async function DashboardPage({
         </div>
 
         <div>
-          <Card className="rounded-2xl">
+          <Card className="rounded-md">
             <CardHeader>
               <CardTitle className="text-sm font-medium text-muted-foreground">
                 At Risk Weeks
