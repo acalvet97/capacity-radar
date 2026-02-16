@@ -86,6 +86,7 @@ export function EvaluateClient({ before, view }: { before: DashboardSnapshot; vi
 
   const [startYmd, setStartYmd] = useState<string>(defaultStart);
   const [deadlineYmd, setDeadlineYmd] = useState<string>("");
+  const [allocationMode, setAllocationMode] = useState<"even" | "fill_capacity">("fill_capacity");
 
   const parsedHours = Number(hours);
   const safeHours = Number.isFinite(parsedHours) ? Math.max(0, parsedHours) : 0;
@@ -103,6 +104,7 @@ export function EvaluateClient({ before, view }: { before: DashboardSnapshot; vi
     totalHours: safeHours,
     startYmd,
     deadlineYmd: deadlineYmd.trim() ? deadlineYmd.trim() : undefined,
+    allocationMode,
   };
 
   function maybeAutoExpandToDeadline(nextDeadlineYmd: string) {
@@ -141,7 +143,7 @@ export function EvaluateClient({ before, view }: { before: DashboardSnapshot; vi
     if (deadlineYmd.trim() && deadlineYmd.trim() < startYmd) return null;
 
     return evaluateNewWork(before, input);
-  }, [before, name, safeHours, startYmd, deadlineYmd]);
+  }, [before, name, safeHours, startYmd, deadlineYmd, allocationMode]);
 
   const horizonHint =
     before.horizonWeeks.length > 0
@@ -248,6 +250,34 @@ export function EvaluateClient({ before, view }: { before: DashboardSnapshot; vi
                   )}
                 </div>
               </div>
+
+              <div className="space-y-2">
+                <Label>Allocation mode</Label>
+                <div className="space-y-2">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="allocationMode"
+                      value="fill_capacity"
+                      checked={allocationMode === "fill_capacity"}
+                      onChange={(e) => setAllocationMode(e.target.value as "even" | "fill_capacity")}
+                      className="h-4 w-4 border border-input text-primary focus:ring-2 focus:ring-ring"
+                    />
+                    <span className="text-sm">Capacity-aware (default)</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="allocationMode"
+                      value="even"
+                      checked={allocationMode === "even"}
+                      onChange={(e) => setAllocationMode(e.target.value as "even" | "fill_capacity")}
+                      className="h-4 w-4 border border-input text-primary focus:ring-2 focus:ring-ring"
+                    />
+                    <span className="text-sm">Even spread (simulation)</span>
+                  </label>
+                </div>
+              </div>
             </div>
 
             <Separator />
@@ -271,6 +301,7 @@ export function EvaluateClient({ before, view }: { before: DashboardSnapshot; vi
                       totalHours: safeHours,
                       startYmd: startYmd.trim(),
                       deadlineYmd: deadlineYmd.trim() ? deadlineYmd.trim() : undefined,
+                      allocationMode,
                     });
 
                     toast.success("Work committed", {
@@ -395,7 +426,15 @@ export function EvaluateClient({ before, view }: { before: DashboardSnapshot; vi
                     <CardContent className="space-y-1">
                       <div className="text-lg font-semibold">{result.applied.weekRangeLabel}</div>
                       <div className="text-xs text-muted-foreground">
-                        {result.applied.perWeekHours}h / week ({result.applied.weeksCount} weeks)
+                        {result.applied.allocationMode === "even" ? (
+                          <>
+                            {result.applied.perWeekHours}h / week ({result.applied.weeksCount} weeks)
+                          </>
+                        ) : (
+                          <>
+                            Allocated across {result.applied.weeksCount} week{result.applied.weeksCount !== 1 ? "s" : ""} (capacity-capped)
+                          </>
+                        )}
                       </div>
                     </CardContent>
                   </Card>

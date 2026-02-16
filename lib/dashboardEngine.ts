@@ -190,7 +190,7 @@ export async function getDashboardSnapshotFromDb(
   // 3) Load work items
   const { data: workItems, error: wiErr } = await supabase
     .from("work_items")
-    .select("estimated_hours, start_date, deadline")
+    .select("estimated_hours, start_date, deadline, allocation_mode")
     .eq("team_id", teamId);
 
   if (wiErr) throw new Error(wiErr.message);
@@ -233,11 +233,44 @@ export async function getDashboardSnapshotFromDb(
       horizonWeeks.length - 1
     );
 
-    const weeksCount = endIdx - startIdx + 1;
-    const perWeek = hours / weeksCount;
+    const allocationMode = (item.allocation_mode as "even" | "fill_capacity" | null) ?? "fill_capacity";
 
-    for (let i = startIdx; i <= endIdx; i++) {
-      horizonWeeks[i].committedHours = round1(horizonWeeks[i].committedHours + perWeek);
+    if (allocationMode === "even") {
+      // Even distribution
+      const weeksCount = endIdx - startIdx + 1;
+      const perWeek = hours / weeksCount;
+
+      for (let i = startIdx; i <= endIdx; i++) {
+        horizonWeeks[i].committedHours = round1(horizonWeeks[i].committedHours + perWeek);
+      }
+    } else {
+      // Fill available capacity (cap at 100%)
+      let remainingHours = hours;
+
+      // First pass: fill each week up to capacity
+      for (let i = startIdx; i <= endIdx && remainingHours > 0; i++) {
+        const week = horizonWeeks[i];
+        const availableCapacity = Math.max(0, week.capacityHours - week.committedHours);
+        const hoursToAdd = Math.min(remainingHours, availableCapacity);
+        
+        if (hoursToAdd > 0) {
+          horizonWeeks[i] = {
+            ...week,
+            committedHours: round1(week.committedHours + hoursToAdd),
+          };
+          remainingHours -= hoursToAdd;
+        }
+      }
+
+      // Second pass: distribute any remaining hours evenly
+      if (remainingHours > 0) {
+        const weeksCount = endIdx - startIdx + 1;
+        const perWeek = remainingHours / weeksCount;
+
+        for (let i = startIdx; i <= endIdx; i++) {
+          horizonWeeks[i].committedHours = round1(horizonWeeks[i].committedHours + perWeek);
+        }
+      }
     }
   }
 

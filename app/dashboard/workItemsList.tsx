@@ -101,7 +101,7 @@ export function WorkItemsList(props: { teamId: string; items: WorkItemRow[] }) {
     <Card className="rounded-md">
       <CardHeader>
         <CardTitle className="text-sm font-medium text-muted-foreground">
-          Committed Work
+          Committed workload
         </CardTitle>
       </CardHeader>
 
@@ -120,14 +120,26 @@ export function WorkItemsList(props: { teamId: string; items: WorkItemRow[] }) {
                   className="space-y-2 rounded-md border p-3"
                 >
                   {!isEditing ? (
-                    <div className="flex items-center justify-between gap-4">
-                      <div className="min-w-0">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="min-w-0 space-y-1">
                         <div className="text-sm font-medium truncate">
                           {displayName}
                         </div>
-                        <div className="mt-1 text-xs text-muted-foreground">
-                          {Math.round(it.estimated_hours)}h · start {formatDate(it.start_date)} ·
-                          deadline {formatDate(it.deadline)} · created {formatDate(it.created_at)}
+                        <div className="text-xs text-muted-foreground">
+                          <span className="font-medium text-foreground">
+                            {Math.round(it.estimated_hours)}h
+                          </span>
+                          {it.start_date && it.deadline ? (
+                            <>
+                              {" "}
+                              · {formatDate(it.start_date)} → {formatDate(it.deadline)}
+                            </>
+                          ) : it.start_date ? (
+                            <>
+                              {" "}
+                              · starts {formatDate(it.start_date)}
+                            </>
+                          ) : null}
                         </div>
                       </div>
 

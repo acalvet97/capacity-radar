@@ -1,11 +1,14 @@
 // lib/evaluateEngine.ts
 import type { DashboardSnapshot, WeekSnapshot, Bucket } from "@/lib/dashboardEngine";
 
+export type AllocationMode = "even" | "fill_capacity";
+
 export type NewWorkInput = {
   name: string;
   totalHours: number;
   startYmd: string;      // "YYYY-MM-DD"
   deadlineYmd?: string;  // "YYYY-MM-DD" (optional)
+  allocationMode?: AllocationMode; // Defaults to "fill_capacity"
 };
 
 export type EvaluateResult = {
@@ -22,6 +25,7 @@ export type EvaluateResult = {
     weekRangeLabel: string; // e.g. "2026-02-16 → 2026-03-08"
     startIdx: number;
     endIdx: number;
+    allocationMode: AllocationMode;
   };
 };
 
@@ -55,14 +59,17 @@ function weekIndexForYmd(horizonWeeks: WeekSnapshot[], ymd: string): number {
 }
 
 /**
- * Apply new work uniformly across the weeks determined by startYmd..deadlineYmd,
- * clamped to the current view horizon.
+ * Apply new work using the selected allocation mode.
+ * - "even": Distribute hours uniformly across weeks
+ * - "fill_capacity": Fill available capacity up to 100% per week, then distribute remainder evenly
  */
 export function applyWorkToHorizon(
   horizonWeeks: WeekSnapshot[],
   input: NewWorkInput
 ): WeekSnapshot[] {
   if (!horizonWeeks.length) return horizonWeeks;
+
+  const mode = input.allocationMode ?? "fill_capacity";
 
   const startIdx = clamp(
     weekIndexForYmd(horizonWeeks, input.startYmd),
@@ -77,16 +84,53 @@ export function applyWorkToHorizon(
 
   const endIdx = clamp(endIdxRaw, startIdx, horizonWeeks.length - 1);
 
-  const weeksCount = endIdx - startIdx + 1;
-  const perWeek = input.totalHours / weeksCount;
+  if (mode === "even") {
+    // Even distribution (baseline)
+    const weeksCount = endIdx - startIdx + 1;
+    const perWeek = input.totalHours / weeksCount;
 
-  return horizonWeeks.map((w, idx) => {
-    if (idx < startIdx || idx > endIdx) return w;
-    return {
-      ...w,
-      committedHours: round1(w.committedHours + perWeek),
-    };
-  });
+    return horizonWeeks.map((w, idx) => {
+      if (idx < startIdx || idx > endIdx) return w;
+      return {
+        ...w,
+        committedHours: round1(w.committedHours + perWeek),
+      };
+    });
+  } else {
+    // Fill available capacity (cap at 100%)
+    const result = [...horizonWeeks];
+    let remainingHours = input.totalHours;
+
+    // First pass: fill each week up to capacity
+    for (let i = startIdx; i <= endIdx && remainingHours > 0; i++) {
+      const week = result[i];
+      const availableCapacity = Math.max(0, week.capacityHours - week.committedHours);
+      const hoursToAdd = Math.min(remainingHours, availableCapacity);
+      
+      if (hoursToAdd > 0) {
+        result[i] = {
+          ...week,
+          committedHours: round1(week.committedHours + hoursToAdd),
+        };
+        remainingHours -= hoursToAdd;
+      }
+    }
+
+    // Second pass: distribute any remaining hours evenly
+    if (remainingHours > 0) {
+      const weeksCount = endIdx - startIdx + 1;
+      const perWeek = remainingHours / weeksCount;
+
+      for (let i = startIdx; i <= endIdx; i++) {
+        result[i] = {
+          ...result[i],
+          committedHours: round1(result[i].committedHours + perWeek),
+        };
+      }
+    }
+
+    return result;
+  }
 }
 
 /**
@@ -158,6 +202,8 @@ export function evaluateNewWork(before: DashboardSnapshot, input: NewWorkInput):
   const endBucket = before.horizonWeeks[endIdx];
   const weekRangeLabel = `${startBucket.weekStartYmd} → ${endBucket.weekEndYmd}`;
 
+  const mode = input.allocationMode ?? "fill_capacity";
+
   return {
     before,
     after,
@@ -166,6 +212,6 @@ export function evaluateNewWork(before: DashboardSnapshot, input: NewWorkInput):
       maxUtilizationPct: after.maxUtilizationPct - before.maxUtilizationPct,
       overallUtilizationPct: after.overallUtilizationPct - before.overallUtilizationPct,
     },
-    applied: { weeksCount, perWeekHours, weekRangeLabel, startIdx, endIdx },
+    applied: { weeksCount, perWeekHours, weekRangeLabel, startIdx, endIdx, allocationMode: mode },
   };
 }

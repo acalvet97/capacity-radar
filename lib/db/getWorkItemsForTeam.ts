@@ -8,6 +8,7 @@ export type WorkItemRow = {
   start_date: string | null;
   deadline: string | null;
   created_at: string;
+  allocation_mode?: "even" | "fill_capacity" | null;
 };
 
 export async function getWorkItemsForTeam(teamId: string): Promise<WorkItemRow[]> {
@@ -16,7 +17,7 @@ export async function getWorkItemsForTeam(teamId: string): Promise<WorkItemRow[]
 
   const { data, error } = await supabase
     .from("work_items")
-    .select("id, name, estimated_hours, start_date, deadline, created_at")
+    .select("id, name, estimated_hours, start_date, deadline, created_at, allocation_mode")
     .eq("team_id", teamId)
     .order("created_at", { ascending: false });
 
