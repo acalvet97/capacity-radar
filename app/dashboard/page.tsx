@@ -241,17 +241,29 @@ export default async function DashboardPage({
 
                 return (
                   <div key={week.weekStartYmd} className="space-y-2">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="font-medium">{week.weekLabel}</span>
-                      <span className="text-muted-foreground">
-                        {Math.round(week.committedHours)}h / {Math.round(week.capacityHours)}h —{" "}
-                        {utilization}%
-                        {utilization > 100 && (
-                          <span className="ml-2 text-xs text-red-600">
-                            +{utilization - 100}% over
+                    <div className="flex items-center justify-between gap-4 text-sm">
+                      <div className="min-w-0">
+                        <div className="font-medium">{week.weekLabel}</div>
+                        <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                          <span>
+                            <span className="font-medium text-foreground">
+                              {Math.round(week.committedHours)}h / {Math.round(week.capacityHours)}h
+                            </span>{" "}
+                            committed
                           </span>
-                        )}
-                      </span>
+                          <span>
+                            <span className="font-medium text-foreground">
+                              {utilization}%
+                            </span>{" "}
+                            utilization
+                          </span>
+                          {utilization > 100 && (
+                            <span className="text-red-600">
+                              +{utilization - 100}% over capacity
+                            </span>
+                          )}
+                        </div>
+                      </div>
                     </div>
 
                     <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
