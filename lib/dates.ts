@@ -32,6 +32,18 @@ export function utcDateToYmd(d: Date): string {
 }
 
 /**
+ * Format a date string (YYYY-MM-DD or ISO) as "dd/mm/yyyy" for frontend display.
+ */
+export function formatDateDdMmYyyy(dateStr: string): string {
+  const d = new Date(dateStr);
+  if (Number.isNaN(d.getTime())) return dateStr;
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(d.getUTCDate()).padStart(2, "0");
+  return `${day}/${m}/${y}`;
+}
+
+/**
  * Add N days to a UTC Date (safe for date-only logic).
  */
 export function addDaysUtc(d: Date, days: number): Date {
@@ -62,7 +74,7 @@ export type WeekBucket = {
   key: string;           // e.g. "2026-02-16" (weekStartYmd)
   weekStartYmd: string;  // Monday
   weekEndYmd: string;    // Sunday
-  label: string;         // e.g. "Feb 16–Feb 22"
+  label: string;         // e.g. "Feb 16 - Feb 22"
 };
 
 /**
@@ -103,7 +115,7 @@ export function buildIsoWeekHorizon(params: {
       key: wsYmd,
       weekStartYmd: wsYmd,
       weekEndYmd: weYmd,
-      label: `${fmt.format(ws)}–${fmt.format(we)}`,
+      label: `${fmt.format(ws)} - ${fmt.format(we)}`,
     });
   }
 

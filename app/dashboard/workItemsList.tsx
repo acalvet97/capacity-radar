@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { deleteWorkItemAction, updateWorkItemAction } from "@/app/actions/workItems";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { WorkItemRow } from "@/lib/db/getWorkItemsForTeam";
+import { formatDateDdMmYyyy } from "@/lib/dates";
 
 export function WorkItemsList(props: { teamId: string; items: WorkItemRow[] }) {
   const { teamId, items } = props;
@@ -20,10 +21,7 @@ export function WorkItemsList(props: { teamId: string; items: WorkItemRow[] }) {
 
   function formatDate(dateStr: string | null) {
     if (!dateStr) return "—";
-    // Works for ISO strings and "YYYY-MM-DD"
-    const d = new Date(dateStr);
-    if (Number.isNaN(d.getTime())) return dateStr;
-    return d.toLocaleDateString();
+    return formatDateDdMmYyyy(dateStr);
   }
 
   function onDelete(workItemId: string) {

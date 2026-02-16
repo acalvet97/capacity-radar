@@ -19,6 +19,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 
 import type { DashboardSnapshot } from "@/lib/dashboardEngine";
+import { formatDateDdMmYyyy } from "@/lib/dates";
 import { evaluateNewWork, type NewWorkInput } from "@/lib/evaluateEngine";
 import { commitWork } from "@/app/evaluate/actions";
 
@@ -147,9 +148,9 @@ export function EvaluateClient({ before, view }: { before: DashboardSnapshot; vi
 
   const horizonHint =
     before.horizonWeeks.length > 0
-      ? `${before.horizonWeeks[0].weekStartYmd} → ${
+      ? `${formatDateDdMmYyyy(before.horizonWeeks[0].weekStartYmd)} → ${formatDateDdMmYyyy(
           before.horizonWeeks[before.horizonWeeks.length - 1].weekEndYmd
-        }`
+        )}`
       : "";
 
   const viewLabel =

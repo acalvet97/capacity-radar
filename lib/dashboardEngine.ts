@@ -4,7 +4,7 @@ import { supabaseServer } from "@/lib/supabaseServer";
 export type Bucket = "low" | "medium" | "high";
 
 export type WeekSnapshot = {
-  weekLabel: string;      // e.g. "16 Feb–22 Feb"
+  weekLabel: string;      // e.g. "16 Feb - 22 Feb"
   weekStartYmd: string;   // "YYYY-MM-DD" (Monday)
   weekEndYmd: string;     // "YYYY-MM-DD" (Sunday)
   capacityHours: number;
@@ -14,7 +14,8 @@ export type WeekSnapshot = {
 export type DashboardSnapshot = {
   horizonWeeks: WeekSnapshot[];
   totalCommittedHours: number;
-  totalCapacityHours: number;
+  totalCapacityHours: number; // Capacity for the current view window
+  cycleCapacityHours: number; // Total capacity per 4-week cycle
   overallUtilizationPct: number;
   weeksEquivalent: number;
   maxUtilizationPct: number;
@@ -100,7 +101,7 @@ function buildWeekLabel(weekStart: Date, weekEnd: Date, locale: string) {
     month: "short",
     day: "numeric",
   });
-  return `${fmt.format(weekStart)}–${fmt.format(weekEnd)}`;
+  return `${fmt.format(weekStart)} - ${fmt.format(weekEnd)}`;
 }
 
 function buildHorizon(params: {
@@ -172,12 +173,12 @@ export async function getDashboardSnapshotFromDb(
 
   if (memErr) throw new Error(memErr.message);
 
-  const totalCapacityHours = Math.round(
+  const cycleCapacityHours = Math.round(
     (members ?? []).reduce((sum, m) => sum + Number(m.hours_per_cycle ?? 0), 0)
   );
 
   // MVP capacity model: per-week capacity derived from "per 4-week cycle"
-  const weeklyCapacity = totalCapacityHours / 4;
+  const weeklyCapacity = cycleCapacityHours / 4;
 
   // 2) Build horizon (date-native)
   const horizonWeeks = buildHorizon({
@@ -301,6 +302,7 @@ export async function getDashboardSnapshotFromDb(
     horizonWeeks,
     totalCommittedHours,
     totalCapacityHours: Math.round(viewCapacityHours), // capacity for the current view
+    cycleCapacityHours, // total capacity per 4-week cycle
     overallUtilizationPct,
     maxUtilizationPct,
     exposureBucket: bucketFromUtil(maxUtilizationPct),

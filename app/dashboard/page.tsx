@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MVP_TEAM_ID } from "@/lib/mvpTeam";
 import { getDashboardSnapshotFromDb } from "@/lib/dashboardEngine";
+import { recomputeSnapshot } from "@/lib/evaluateEngine";
 import { getWorkItemsForTeam } from "@/lib/db/getWorkItemsForTeam";
 import { WorkItemsList } from "./workItemsList";
 
@@ -16,6 +17,7 @@ import {
   utcDateToYmd,
   startOfIsoWeekUtc,
   addDaysUtc,
+  formatDateDdMmYyyy,
 } from "@/lib/dates";
 
 type Bucket = "low" | "medium" | "high";
@@ -111,9 +113,8 @@ export default async function DashboardPage({
   const todayYmd = todayYmdInTz("Europe/Madrid");
   const weeksInView = weeksForView(view, todayYmd);
 
-  // ✅ Always fetch full 26-week snapshot regardless of view
-  // View only affects what we display, not the underlying data
-  const snapshot = await getDashboardSnapshotFromDb(MVP_TEAM_ID, {
+  // ✅ Always fetch full 26-week snapshot for underlying data
+  const fullSnapshot = await getDashboardSnapshotFromDb(MVP_TEAM_ID, {
     startYmd: todayYmd,
     weeks: 26,
     maxWeeks: 26,
@@ -122,7 +123,10 @@ export default async function DashboardPage({
   });
 
   // ✅ Filter weeks for display based on view
-  const horizonWeeksForView = snapshot.horizonWeeks.slice(0, weeksInView);
+  const horizonWeeksForView = fullSnapshot.horizonWeeks.slice(0, weeksInView);
+
+  // ✅ Recalculate KPIs for the selected view window
+  const snapshot = recomputeSnapshot(fullSnapshot, horizonWeeksForView);
 
   const workItems = await getWorkItemsForTeam(MVP_TEAM_ID);
 
@@ -134,12 +138,12 @@ export default async function DashboardPage({
     })
     .filter((w) => w.utilizationPct > 90);
 
-  // ✅ Hint shows only the view window
+  // ✅ Hint shows only the view window (dd/mm/yyyy)
   const horizonHint =
     horizonWeeksForView.length > 0
-      ? `${horizonWeeksForView[0].weekStartYmd} → ${
+      ? `${formatDateDdMmYyyy(horizonWeeksForView[0].weekStartYmd)} → ${formatDateDdMmYyyy(
           horizonWeeksForView[horizonWeeksForView.length - 1].weekEndYmd
-        }`
+        )}`
       : "";
 
   const viewLabel =
@@ -155,71 +159,78 @@ export default async function DashboardPage({
 
   return (
     <main className="mx-auto max-w-6xl p-6 space-y-6">
-      <header className="space-y-3">
-        <div className="flex items-start justify-between gap-4 flex-wrap">
-          <div className="space-y-1">
-            <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
-            <p className="text-sm text-muted-foreground">
-              Snapshot of committed workload vs team capacity over your selected view.
-            </p>
-          </div>
-
-          <div className="w-full sm:w-[320px]">
-            <DashboardViewSelector view={view} horizonHint={horizonHint} />
-          </div>
+      <header className="space-y-4">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Shows how much of your team&apos;s capacity is already committed in this window.
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="text-sm font-medium text-foreground">View window:</span>
+          <DashboardViewSelector view={view} horizonHint={horizonHint} />
         </div>
       </header>
 
-      {/* KPIs */}
+      {/* KPIs — Risk first, context second. 4-col: primary 2, others 1 each. */}
       <section className="grid gap-4 md:grid-cols-4">
-        <Card className="rounded-md">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Exposure</CardTitle>
-          </CardHeader>
-          <CardContent className="flex items-center justify-between">
-            <div className="text-2xl font-semibold tracking-tight">
-              {bucketLabel(snapshot.exposureBucket as Bucket)}
+        {/* Tier 1: Primary — Max Utilization + Exposure (2 cols) */}
+        <Card className="rounded-md md:col-span-2">
+          <CardContent className="pt-4 pb-4">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <div className="text-3xl font-semibold tracking-tight">
+                  {snapshot.maxUtilizationPct}%
+                </div>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Highest weekly load in this window
+                </p>
+                <p className="mt-0.5 text-xs text-muted-foreground/80">
+                  (This is where your team is most constrained.)
+                </p>
+              </div>
+              <Badge
+                variant="outline"
+                className={badgeStyles[snapshot.exposureBucket as Bucket]}
+                aria-label={`Exposure: ${bucketLabel(snapshot.exposureBucket as Bucket)}`}
+              >
+                {bucketLabel(snapshot.exposureBucket as Bucket)} exposure
+              </Badge>
             </div>
-            <Badge
-              variant="outline"
-              className={badgeStyles[snapshot.exposureBucket as Bucket]}
-              aria-label={`Max utilization ${snapshot.maxUtilizationPct}%`}
-            >
-              {snapshot.maxUtilizationPct}% max
-            </Badge>
           </CardContent>
         </Card>
 
+        {/* Tier 2: Committed (1 col) */}
         <Card className="rounded-md">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Max Utilization
+          <CardHeader className="pb-1">
+            <CardTitle className="text-xs font-medium text-muted-foreground">
+              Committed
             </CardTitle>
           </CardHeader>
-          <CardContent className="text-2xl font-semibold tracking-tight">
-            {snapshot.maxUtilizationPct}%
+          <CardContent className="space-y-0.5">
+            <div className="text-xl font-semibold tracking-tight">
+              {snapshot.totalCommittedHours}h / {snapshot.totalCapacityHours}h
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {snapshot.overallUtilizationPct}% of capacity in view
+            </p>
           </CardContent>
         </Card>
 
+        {/* Tier 2: Weeks Equivalent (1 col) */}
         <Card className="rounded-md">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Committed Hours
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="text-2xl font-semibold tracking-tight">
-            {snapshot.totalCommittedHours}h
-          </CardContent>
-        </Card>
-
-        <Card className="rounded-md">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
+          <CardHeader className="pb-1">
+            <CardTitle className="text-xs font-medium text-muted-foreground">
               Weeks Equivalent
             </CardTitle>
           </CardHeader>
-          <CardContent className="text-2xl font-semibold tracking-tight">
-            {snapshot.weeksEquivalent}w
+          <CardContent className="space-y-0.5">
+            <div className="text-xl font-semibold tracking-tight">
+              {snapshot.weeksEquivalent}w
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Total committed expressed as weeks of team capacity
+            </p>
           </CardContent>
         </Card>
       </section>

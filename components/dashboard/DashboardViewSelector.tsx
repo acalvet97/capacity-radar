@@ -1,7 +1,6 @@
 "use client";
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -31,22 +30,10 @@ export function DashboardViewSelector({
     router.push(`${pathname}?${params.toString()}`);
   }
 
-  const viewLabel =
-    view === "month"
-      ? "Current month"
-      : view === "4w"
-      ? "Next 4 weeks"
-      : view === "12w"
-      ? "Next 12 weeks"
-      : view === "quarter"
-      ? "Current Quarter"
-      : "6 months";
-
   return (
-    <div className="space-y-2">
-      <Label>View window</Label>
+    <div className="flex items-center gap-3">
       <Select value={view} onValueChange={(v) => setViewInUrl(v as ViewKey)}>
-        <SelectTrigger className="rounded-md">
+        <SelectTrigger className="rounded-md min-w-[160px]">
           <SelectValue placeholder="Choose a view" />
         </SelectTrigger>
         <SelectContent>
@@ -57,12 +44,11 @@ export function DashboardViewSelector({
           <SelectItem value="6m">6 months</SelectItem>
         </SelectContent>
       </Select>
-
-      {horizonHint ? (
-        <p className="text-xs text-muted-foreground">
-          {viewLabel}: {horizonHint}
-        </p>
-      ) : null}
+      {horizonHint && (
+        <span className="text-xs text-muted-foreground whitespace-nowrap">
+          {horizonHint}
+        </span>
+      )}
     </div>
   );
 }
