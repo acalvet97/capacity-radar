@@ -1,4 +1,7 @@
 // app/dashboard/page.tsx
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MVP_TEAM_ID } from "@/lib/mvpTeam";
@@ -38,9 +41,16 @@ const bucketFromUtilization = (pct: number): Bucket => {
 };
 
 function normalizeView(raw: unknown): ViewKey {
-  const v = typeof raw === "string" ? raw : "";
+  // ✅ handle string | string[] | undefined
+  const v =
+    typeof raw === "string"
+      ? raw
+      : Array.isArray(raw)
+      ? raw[0]
+      : "";
+
   if (v === "month" || v === "4w" || v === "12w" || v === "quarter" || v === "6m") return v;
-  return "4w"; // ✅ default
+  return "4w";
 }
 
 function endOfIsoWeekUtc(d: Date): Date {
@@ -61,7 +71,7 @@ function weeksBetweenIsoWeeksInclusive(startYmd: string, endYmd: string): number
 
 function lastDayOfMonthYmd(todayYmd: string): string {
   const [yy, mm] = todayYmd.split("-").map(Number);
-  const last = new Date(Date.UTC(yy, mm, 0)); // day 0 of next month
+  const last = new Date(Date.UTC(yy, mm, 0));
   return utcDateToYmd(last);
 }
 
@@ -71,11 +81,9 @@ function weeksForView(view: ViewKey, todayYmd: string): number {
   if (view === "quarter") return 13;
   if (view === "6m") return 26;
 
-  // month: from today to month-end, but include all ISO weeks up to the week containing month-end
+  // month view -> include ISO weeks until the week containing month-end
   const monthEndYmd = lastDayOfMonthYmd(todayYmd);
-  const endSunday = endOfIsoWeekUtc(ymdToUtcDate(monthEndYmd));
-  const endSundayYmd = utcDateToYmd(endSunday);
-
+  const endSundayYmd = utcDateToYmd(endOfIsoWeekUtc(ymdToUtcDate(monthEndYmd)));
   return weeksBetweenIsoWeeksInclusive(todayYmd, endSundayYmd);
 }
 
@@ -228,7 +236,6 @@ export default async function DashboardPage({
                       <div
                         className={`h-full ${barFill[bucket]}`}
                         style={{ width: `${fillWidth}%` }}
-                        aria-label={`${week.weekLabel} utilization ${utilization}%`}
                       />
                     </div>
                   </div>
@@ -263,10 +270,10 @@ export default async function DashboardPage({
         </div>
       </section>
 
-      {/* Committed Work List + Delete */}
       <section className="grid gap-4 md:grid-cols-1">
         <WorkItemsList teamId={MVP_TEAM_ID} items={workItems} />
       </section>
     </main>
   );
 }
+

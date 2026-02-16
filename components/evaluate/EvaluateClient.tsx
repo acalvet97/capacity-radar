@@ -1,8 +1,7 @@
-// components/evaluate/EvaluateClient.tsx
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -50,10 +49,6 @@ function isValidYmd(ymd: string) {
   return /^\d{4}-\d{2}-\d{2}$/.test(ymd);
 }
 
-/**
- * Choose the smallest preset that can include `neededWeeks`.
- * Cap at 6m (26w).
- */
 function viewForNeededWeeks(neededWeeks: number): ViewKey {
   if (neededWeeks <= 4) return "4w";
   if (neededWeeks <= 12) return "12w";
@@ -61,15 +56,10 @@ function viewForNeededWeeks(neededWeeks: number): ViewKey {
   return "6m";
 }
 
-/**
- * Compute ISO-week count between two YYYY-MM-DD endpoints inclusive, aligned to your view buckets.
- * We approximate using strings + Date UTC.
- */
 function weeksBetweenIsoWeeksInclusive(startYmd: string, endYmd: string): number {
   const start = new Date(`${startYmd}T00:00:00Z`);
   const end = new Date(`${endYmd}T00:00:00Z`);
 
-  // startOfIsoWeek (UTC)
   const startMondayIndex = (start.getUTCDay() + 6) % 7;
   start.setUTCDate(start.getUTCDate() - startMondayIndex);
 
@@ -84,6 +74,7 @@ function weeksBetweenIsoWeeksInclusive(startYmd: string, endYmd: string): number
 
 export function EvaluateClient({ before, view }: { before: DashboardSnapshot; view: ViewKey }) {
   const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
 
@@ -94,7 +85,7 @@ export function EvaluateClient({ before, view }: { before: DashboardSnapshot; vi
   const viewEnd = before.horizonWeeks[before.horizonWeeks.length - 1]?.weekEndYmd ?? "";
 
   const [startYmd, setStartYmd] = useState<string>(defaultStart);
-  const [deadlineYmd, setDeadlineYmd] = useState<string>(""); // empty = no deadline
+  const [deadlineYmd, setDeadlineYmd] = useState<string>("");
 
   const parsedHours = Number(hours);
   const safeHours = Number.isFinite(parsedHours) ? Math.max(0, parsedHours) : 0;
@@ -102,33 +93,39 @@ export function EvaluateClient({ before, view }: { before: DashboardSnapshot; vi
   function setViewInUrl(nextView: ViewKey) {
     const params = new URLSearchParams(searchParams?.toString());
     params.set("view", nextView);
-    router.replace(`?${params.toString()}`);
-    router.refresh(); // ✅
+    router.replace(`${pathname}?${params.toString()}`);
+    router.refresh();
   }
+
 
   const input: NewWorkInput = {
     name,
     totalHours: safeHours,
-    startYmd: startYmd,
+    startYmd,
     deadlineYmd: deadlineYmd.trim() ? deadlineYmd.trim() : undefined,
   };
 
-  // Auto-expand: if deadline is beyond current view end, jump to a bigger preset
   function maybeAutoExpandToDeadline(nextDeadlineYmd: string) {
     const d = nextDeadlineYmd.trim();
     if (!d || !isValidYmd(d) || !viewEnd) return;
-
-    if (d <= viewEnd) return; // already inside view
+    if (d <= viewEnd) return;
 
     const neededWeeks = weeksBetweenIsoWeeksInclusive(startYmd || defaultStart, d);
     const nextView = viewForNeededWeeks(neededWeeks);
 
     if (nextView !== view) {
       toast.message("View expanded to include deadline", {
-        description: `Switched to ${nextView === "6m" ? "6 months" : nextView === "quarter" ? "Quarter" : nextView === "12w" ? "12 weeks" : "Next 4 weeks"}.`,
+        description: `Switched to ${
+          nextView === "6m"
+            ? "6 months"
+            : nextView === "quarter"
+            ? "Quarter"
+            : nextView === "12w"
+            ? "12 weeks"
+            : "Next 4 weeks"
+        }.`,
       });
       setViewInUrl(nextView);
-      // server will refetch `before` for that view automatically
     } else if (nextView === "6m" && neededWeeks > 26) {
       toast.message("Deadline exceeds 6-month view cap", {
         description: "View is capped at 6 months for MVP; impact beyond that isn’t shown yet.",
@@ -148,7 +145,9 @@ export function EvaluateClient({ before, view }: { before: DashboardSnapshot; vi
 
   const horizonHint =
     before.horizonWeeks.length > 0
-      ? `${before.horizonWeeks[0].weekStartYmd} → ${before.horizonWeeks[before.horizonWeeks.length - 1].weekEndYmd}`
+      ? `${before.horizonWeeks[0].weekStartYmd} → ${
+          before.horizonWeeks[before.horizonWeeks.length - 1].weekEndYmd
+        }`
       : "";
 
   const viewLabel =
@@ -164,14 +163,12 @@ export function EvaluateClient({ before, view }: { before: DashboardSnapshot; vi
 
   return (
     <section className="grid gap-4 md:grid-cols-3">
-      {/* Inputs */}
       <div>
         <Card className="rounded-2xl">
           <CardHeader>
             <CardTitle className="text-sm font-medium text-muted-foreground">Inputs</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {/* View */}
             <div className="space-y-2">
               <Label>View window</Label>
               <Select value={view} onValueChange={(v) => setViewInUrl(v as ViewKey)}>
@@ -186,6 +183,7 @@ export function EvaluateClient({ before, view }: { before: DashboardSnapshot; vi
                   <SelectItem value="6m">6 months</SelectItem>
                 </SelectContent>
               </Select>
+
               {horizonHint && (
                 <p className="text-xs text-muted-foreground">
                   {viewLabel}: {horizonHint}

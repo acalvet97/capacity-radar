@@ -1,4 +1,7 @@
 // app/evaluate/page.tsx
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 import { EvaluateClient } from "@/components/evaluate/EvaluateClient";
 import { MVP_TEAM_ID } from "@/lib/mvpTeam";
 import { getDashboardSnapshotFromDb } from "@/lib/dashboardEngine";
@@ -29,12 +32,18 @@ function lastDayOfMonthYmd(todayYmd: string): string {
 }
 
 function normalizeView(raw: unknown): ViewKey {
-  const v = typeof raw === "string" ? raw : "";
+  const v =
+    typeof raw === "string"
+      ? raw
+      : Array.isArray(raw)
+      ? raw[0]
+      : "";
+
   if (v === "month" || v === "4w" || v === "12w" || v === "quarter" || v === "6m") return v;
   return "4w";
 }
 
-function weeksForView(view: ViewKey, todayYmd: string): { weeks: number; endYmd?: string } {
+function weeksForView(view: ViewKey, todayYmd: string): { weeks: number } {
   if (view === "4w") return { weeks: 4 };
   if (view === "12w") return { weeks: 12 };
   if (view === "quarter") return { weeks: 13 };
@@ -43,7 +52,7 @@ function weeksForView(view: ViewKey, todayYmd: string): { weeks: number; endYmd?
   const monthEndYmd = lastDayOfMonthYmd(todayYmd);
   const endSundayYmd = utcDateToYmd(endOfIsoWeekUtc(ymdToUtcDate(monthEndYmd)));
   const weeks = weeksBetweenIsoWeeksInclusive(todayYmd, endSundayYmd);
-  return { weeks, endYmd: endSundayYmd };
+  return { weeks };
 }
 
 export default async function EvaluatePage({
@@ -53,6 +62,7 @@ export default async function EvaluatePage({
 }) {
   const view = normalizeView(searchParams?.view);
   const todayYmd = todayYmdInTz("Europe/Madrid");
+
   const { weeks } = weeksForView(view, todayYmd);
 
   const before = await getDashboardSnapshotFromDb(MVP_TEAM_ID, {
@@ -72,8 +82,9 @@ export default async function EvaluatePage({
         </p>
       </header>
 
-      {/* ✅ key={view} forces a remount when changing the selector */}
+      {/* ✅ remount on view changes */}
       <EvaluateClient key={view} before={before} view={view} />
     </main>
   );
 }
+

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -20,13 +20,16 @@ export function DashboardViewSelector({
   horizonHint: string;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
 
   function setViewInUrl(nextView: ViewKey) {
     const params = new URLSearchParams(searchParams?.toString());
     params.set("view", nextView);
-    router.replace(`?${params.toString()}`);
-    router.refresh(); // ✅ makes the server page refetch snapshot
+
+    // ✅ always navigate with pathname + query
+    router.replace(`${pathname}?${params.toString()}`);
+    router.refresh(); // ✅ refetch server snapshot
   }
 
   const viewLabel =
@@ -64,3 +67,6 @@ export function DashboardViewSelector({
     </div>
   );
 }
+
+
+
