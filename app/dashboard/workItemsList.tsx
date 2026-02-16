@@ -25,12 +25,22 @@ export function WorkItemsList(props: { teamId: string; items: WorkItemRow[] }) {
     if (!ok) return;
 
     startTransition(async () => {
-      const res = await deleteWorkItemAction({ teamId, workItemId });
-      if (!res.ok) {
-        window.alert(res.message ?? "Delete failed");
-        return;
+      try {
+        console.log("calling deleteWorkItemAction", { teamId, workItemId });
+        const res = await deleteWorkItemAction({ teamId, workItemId });
+        console.log("deleteWorkItemAction result", res);
+        if (!res || !res.ok) {
+          window.alert(res?.message ?? "Delete failed");
+          return;
+        }
+        // Refresh to update the UI after server-side deletion
+        router.refresh();
+      } catch (err: any) {
+        // Surface unexpected errors to the developer/user
+        // eslint-disable-next-line no-console
+        console.error("deleteWorkItemAction error", err);
+        window.alert(err?.message ?? "Delete failed (unexpected error)");
       }
-      router.refresh();
     });
   }
 

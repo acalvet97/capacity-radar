@@ -93,8 +93,8 @@ export function EvaluateClient({ before, view }: { before: DashboardSnapshot; vi
   function setViewInUrl(nextView: ViewKey) {
     const params = new URLSearchParams(searchParams?.toString());
     params.set("view", nextView);
-    router.replace(`${pathname}?${params.toString()}`);
-    router.refresh();
+    // Use push so App Router updates search params and re-renders server components.
+    router.push(`${pathname}?${params.toString()}`);
   }
 
 
@@ -119,9 +119,9 @@ export function EvaluateClient({ before, view }: { before: DashboardSnapshot; vi
           nextView === "6m"
             ? "6 months"
             : nextView === "quarter"
-            ? "Quarter"
+            ? "Current Quarter"
             : nextView === "12w"
-            ? "12 weeks"
+            ? "Next 12 weeks"
             : "Next 4 weeks"
         }.`,
       });
@@ -156,9 +156,9 @@ export function EvaluateClient({ before, view }: { before: DashboardSnapshot; vi
       : view === "4w"
       ? "Next 4 weeks"
       : view === "12w"
-      ? "12 weeks"
+      ? "Next 12 weeks"
       : view === "quarter"
-      ? "Quarter"
+      ? "Current Quarter"
       : "6 months";
 
   return (
@@ -178,8 +178,8 @@ export function EvaluateClient({ before, view }: { before: DashboardSnapshot; vi
                 <SelectContent>
                   <SelectItem value="month">Current month</SelectItem>
                   <SelectItem value="4w">Next 4 weeks</SelectItem>
-                  <SelectItem value="12w">12 weeks</SelectItem>
-                  <SelectItem value="quarter">Quarter</SelectItem>
+                  <SelectItem value="12w">Next 12 weeks</SelectItem>
+                  <SelectItem value="quarter">Current Quarter</SelectItem>
                   <SelectItem value="6m">6 months</SelectItem>
                 </SelectContent>
               </Select>

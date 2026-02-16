@@ -37,9 +37,9 @@ export function DashboardViewSelector({
       : view === "4w"
       ? "Next 4 weeks"
       : view === "12w"
-      ? "12 weeks"
+      ? "Next 12 weeks"
       : view === "quarter"
-      ? "Quarter"
+      ? "Current Quarter"
       : "6 months";
 
   return (
@@ -52,8 +52,8 @@ export function DashboardViewSelector({
         <SelectContent>
           <SelectItem value="month">Current month</SelectItem>
           <SelectItem value="4w">Next 4 weeks</SelectItem>
-          <SelectItem value="12w">12 weeks</SelectItem>
-          <SelectItem value="quarter">Quarter</SelectItem>
+          <SelectItem value="12w">Next 12 weeks</SelectItem>
+          <SelectItem value="quarter">Current Quarter</SelectItem>
           <SelectItem value="6m">6 months</SelectItem>
         </SelectContent>
       </Select>

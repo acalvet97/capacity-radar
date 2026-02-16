@@ -1,4 +1,5 @@
 import { supabaseServer } from "@/lib/supabaseServer";
+import { unstable_noStore as noStore } from "next/cache";
 
 export type WorkItemRow = {
   id: string;
@@ -9,6 +10,7 @@ export type WorkItemRow = {
 };
 
 export async function getWorkItemsForTeam(teamId: string): Promise<WorkItemRow[]> {
+  noStore();
   const supabase = supabaseServer();
 
   const { data, error } = await supabase

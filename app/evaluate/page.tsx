@@ -5,6 +5,7 @@ export const revalidate = 0;
 import { EvaluateClient } from "@/components/evaluate/EvaluateClient";
 import { MVP_TEAM_ID } from "@/lib/mvpTeam";
 import { getDashboardSnapshotFromDb } from "@/lib/dashboardEngine";
+import { recomputeSnapshot } from "@/lib/evaluateEngine";
 import { todayYmdInTz, ymdToUtcDate, utcDateToYmd, startOfIsoWeekUtc, addDaysUtc } from "@/lib/dates";
 
 type ViewKey = "month" | "4w" | "12w" | "quarter" | "6m";
@@ -31,6 +32,14 @@ function lastDayOfMonthYmd(todayYmd: string): string {
   return utcDateToYmd(last);
 }
 
+function lastDayOfQuarterYmd(todayYmd: string): string {
+  const [yy, mm] = todayYmd.split("-").map(Number);
+  const quarter = Math.floor((mm - 1) / 3);
+  const quarterEndMonth = (quarter + 1) * 3;
+  const last = new Date(Date.UTC(yy, quarterEndMonth, 0));
+  return utcDateToYmd(last);
+}
+
 function normalizeView(raw: unknown): ViewKey {
   const v =
     typeof raw === "string"
@@ -46,7 +55,11 @@ function normalizeView(raw: unknown): ViewKey {
 function weeksForView(view: ViewKey, todayYmd: string): { weeks: number } {
   if (view === "4w") return { weeks: 4 };
   if (view === "12w") return { weeks: 12 };
-  if (view === "quarter") return { weeks: 13 };
+  if (view === "quarter") {
+    const quarterEndYmd = lastDayOfQuarterYmd(todayYmd);
+    const endSundayYmd = utcDateToYmd(endOfIsoWeekUtc(ymdToUtcDate(quarterEndYmd)));
+    return { weeks: weeksBetweenIsoWeeksInclusive(todayYmd, endSundayYmd) };
+  }
   if (view === "6m") return { weeks: 26 };
 
   const monthEndYmd = lastDayOfMonthYmd(todayYmd);
@@ -64,15 +77,19 @@ export default async function EvaluatePage({
   const view = normalizeView(params?.view);
   const todayYmd = todayYmdInTz("Europe/Madrid");
 
-  const { weeks } = weeksForView(view, todayYmd);
-
+  // Always fetch full 26-week snapshot regardless of view
   const before = await getDashboardSnapshotFromDb(MVP_TEAM_ID, {
     startYmd: todayYmd,
-    weeks,
+    weeks: 26,
     maxWeeks: 26,
     locale: "en-GB",
     tz: "Europe/Madrid",
   });
+
+  // Create a view-limited snapshot for the Evaluate UI so the simulation
+  // runs against the selected view (visualization only)
+  const { weeks } = weeksForView(view, todayYmd);
+  const viewBefore = recomputeSnapshot(before, before.horizonWeeks.slice(0, weeks));
 
   return (
     <main className="mx-auto max-w-6xl p-6 space-y-6">
@@ -83,8 +100,8 @@ export default async function EvaluatePage({
         </p>
       </header>
 
-      {/* ✅ remount on view changes */}
-      <EvaluateClient key={view} before={before} view={view} />
+      {/* remount on view changes */}
+      <EvaluateClient key={view} before={viewBefore} view={view} />
     </main>
   );
 }

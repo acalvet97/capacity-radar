@@ -75,10 +75,24 @@ function lastDayOfMonthYmd(todayYmd: string): string {
   return utcDateToYmd(last);
 }
 
+function lastDayOfQuarterYmd(todayYmd: string): string {
+  const [yy, mm] = todayYmd.split("-").map(Number);
+  // mm is 1-based month number. Determine quarter end month (3,6,9,12)
+  const quarter = Math.floor((mm - 1) / 3);
+  const quarterEndMonth = (quarter + 1) * 3; // 3,6,9,12
+  const last = new Date(Date.UTC(yy, quarterEndMonth, 0));
+  return utcDateToYmd(last);
+}
+
 function weeksForView(view: ViewKey, todayYmd: string): number {
   if (view === "4w") return 4;
   if (view === "12w") return 12;
-  if (view === "quarter") return 13;
+  if (view === "quarter") {
+    // Current quarter -> include ISO weeks until the week containing quarter-end
+    const quarterEndYmd = lastDayOfQuarterYmd(todayYmd);
+    const endSundayYmd = utcDateToYmd(endOfIsoWeekUtc(ymdToUtcDate(quarterEndYmd)));
+    return weeksBetweenIsoWeeksInclusive(todayYmd, endSundayYmd);
+  }
   if (view === "6m") return 26;
 
   // month view -> include ISO weeks until the week containing month-end
@@ -95,29 +109,36 @@ export default async function DashboardPage({
   const params = await searchParams;
   const view = normalizeView(params?.view);
   const todayYmd = todayYmdInTz("Europe/Madrid");
-  const weeks = weeksForView(view, todayYmd);
+  const weeksInView = weeksForView(view, todayYmd);
 
+  // ✅ Always fetch full 26-week snapshot regardless of view
+  // View only affects what we display, not the underlying data
   const snapshot = await getDashboardSnapshotFromDb(MVP_TEAM_ID, {
     startYmd: todayYmd,
-    weeks,
+    weeks: 26,
     maxWeeks: 26,
     locale: "en-GB",
     tz: "Europe/Madrid",
   });
 
+  // ✅ Filter weeks for display based on view
+  const horizonWeeksForView = snapshot.horizonWeeks.slice(0, weeksInView);
+
   const workItems = await getWorkItemsForTeam(MVP_TEAM_ID);
 
-  const atRiskWeeks = snapshot.horizonWeeks
+  // ✅ At-risk weeks only from the current view
+  const atRiskWeeks = horizonWeeksForView
     .map((week) => {
       const utilizationPct = Math.round((week.committedHours / week.capacityHours) * 100);
       return { ...week, utilizationPct, bucket: bucketFromUtilization(utilizationPct) as Bucket };
     })
     .filter((w) => w.utilizationPct > 90);
 
+  // ✅ Hint shows only the view window
   const horizonHint =
-    snapshot.horizonWeeks.length > 0
-      ? `${snapshot.horizonWeeks[0].weekStartYmd} → ${
-          snapshot.horizonWeeks[snapshot.horizonWeeks.length - 1].weekEndYmd
+    horizonWeeksForView.length > 0
+      ? `${horizonWeeksForView[0].weekStartYmd} → ${
+          horizonWeeksForView[horizonWeeksForView.length - 1].weekEndYmd
         }`
       : "";
 
@@ -127,9 +148,9 @@ export default async function DashboardPage({
       : view === "4w"
       ? "Next 4 weeks"
       : view === "12w"
-      ? "12 weeks"
+      ? "Next 12 weeks"
       : view === "quarter"
-      ? "Quarter"
+      ? "Current Quarter"
       : "6 months";
 
   return (
@@ -213,7 +234,7 @@ export default async function DashboardPage({
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              {snapshot.horizonWeeks.map((week) => {
+              {horizonWeeksForView.map((week) => {
                 const utilization = Math.round((week.committedHours / week.capacityHours) * 100);
                 const bucket = bucketFromUtilization(utilization);
                 const fillWidth = Math.min(utilization, 100);
