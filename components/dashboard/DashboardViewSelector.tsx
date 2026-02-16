@@ -28,8 +28,7 @@ export function DashboardViewSelector({
     params.set("view", nextView);
 
     // ✅ always navigate with pathname + query
-    router.replace(`${pathname}?${params.toString()}`);
-    router.refresh(); // ✅ refetch server snapshot
+    router.push(`${pathname}?${params.toString()}`);
   }
 
   const viewLabel =

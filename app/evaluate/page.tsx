@@ -58,9 +58,10 @@ function weeksForView(view: ViewKey, todayYmd: string): { weeks: number } {
 export default async function EvaluatePage({
   searchParams,
 }: {
-  searchParams?: Record<string, string | string[] | undefined>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const view = normalizeView(searchParams?.view);
+  const params = await searchParams;
+  const view = normalizeView(params?.view);
   const todayYmd = todayYmdInTz("Europe/Madrid");
 
   const { weeks } = weeksForView(view, todayYmd);
