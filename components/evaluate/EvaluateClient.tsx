@@ -2,7 +2,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -24,6 +24,7 @@ import { evaluateNewWork, type NewWorkInput } from "@/lib/evaluateEngine";
 import { commitWork } from "@/app/evaluate/actions";
 
 type Bucket = "low" | "medium" | "high";
+type ViewKey = "month" | "4w" | "12w" | "quarter" | "6m";
 
 const badgeStyles: Record<Bucket, string> = {
   low: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20",
@@ -45,29 +46,121 @@ const bucketFromUtilization = (pct: number): Bucket => {
 
 const bucketLabel = (b: Bucket) => (b === "low" ? "LOW" : b === "medium" ? "MEDIUM" : "HIGH");
 
-export function EvaluateClient({ before }: { before: DashboardSnapshot }) {
+function isValidYmd(ymd: string) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(ymd);
+}
+
+/**
+ * Choose the smallest preset that can include `neededWeeks`.
+ * Cap at 6m (26w).
+ */
+function viewForNeededWeeks(neededWeeks: number): ViewKey {
+  if (neededWeeks <= 4) return "4w";
+  if (neededWeeks <= 12) return "12w";
+  if (neededWeeks <= 13) return "quarter";
+  return "6m";
+}
+
+/**
+ * Compute ISO-week count between two YYYY-MM-DD endpoints inclusive, aligned to your view buckets.
+ * We approximate using strings + Date UTC.
+ */
+function weeksBetweenIsoWeeksInclusive(startYmd: string, endYmd: string): number {
+  const start = new Date(`${startYmd}T00:00:00Z`);
+  const end = new Date(`${endYmd}T00:00:00Z`);
+
+  // startOfIsoWeek (UTC)
+  const startMondayIndex = (start.getUTCDay() + 6) % 7;
+  start.setUTCDate(start.getUTCDate() - startMondayIndex);
+
+  const endMonday = new Date(end);
+  const endMondayIndex = (endMonday.getUTCDay() + 6) % 7;
+  endMonday.setUTCDate(endMonday.getUTCDate() - endMondayIndex);
+
+  const ms = endMonday.getTime() - start.getTime();
+  const days = Math.floor(ms / (1000 * 60 * 60 * 24));
+  return Math.floor(days / 7) + 1;
+}
+
+export function EvaluateClient({ before, view }: { before: DashboardSnapshot; view: ViewKey }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
 
   const [name, setName] = useState("New work item");
   const [hours, setHours] = useState<string>("40");
-  const [startWeek, setStartWeek] = useState<string>("0"); // 0..3
-  const [deadlineWeek, setDeadlineWeek] = useState<string>("none"); // "none" | 0..3
+
+  const defaultStart = before.horizonWeeks[0]?.weekStartYmd ?? "";
+  const viewEnd = before.horizonWeeks[before.horizonWeeks.length - 1]?.weekEndYmd ?? "";
+
+  const [startYmd, setStartYmd] = useState<string>(defaultStart);
+  const [deadlineYmd, setDeadlineYmd] = useState<string>(""); // empty = no deadline
 
   const parsedHours = Number(hours);
   const safeHours = Number.isFinite(parsedHours) ? Math.max(0, parsedHours) : 0;
 
+  function setViewInUrl(nextView: ViewKey) {
+    const params = new URLSearchParams(searchParams?.toString());
+    params.set("view", nextView);
+    router.replace(`?${params.toString()}`);
+    router.refresh(); // ✅ IMPORTANT: refetch server snapshot
+  }
+
   const input: NewWorkInput = {
     name,
     totalHours: safeHours,
-    startWeekIndex: Number(startWeek),
-    deadlineWeekIndex: deadlineWeek === "none" ? undefined : Number(deadlineWeek),
+    startYmd: startYmd,
+    deadlineYmd: deadlineYmd.trim() ? deadlineYmd.trim() : undefined,
   };
+
+  // Auto-expand: if deadline is beyond current view end, jump to a bigger preset
+  function maybeAutoExpandToDeadline(nextDeadlineYmd: string) {
+    const d = nextDeadlineYmd.trim();
+    if (!d || !isValidYmd(d) || !viewEnd) return;
+
+    if (d <= viewEnd) return; // already inside view
+
+    const neededWeeks = weeksBetweenIsoWeeksInclusive(startYmd || defaultStart, d);
+    const nextView = viewForNeededWeeks(neededWeeks);
+
+    if (nextView !== view) {
+      toast.message("View expanded to include deadline", {
+        description: `Switched to ${nextView === "6m" ? "6 months" : nextView === "quarter" ? "Quarter" : nextView === "12w" ? "12 weeks" : "Next 4 weeks"}.`,
+      });
+      setViewInUrl(nextView);
+      // server will refetch `before` for that view automatically
+    } else if (nextView === "6m" && neededWeeks > 26) {
+      toast.message("Deadline exceeds 6-month view cap", {
+        description: "View is capped at 6 months for MVP; impact beyond that isn’t shown yet.",
+      });
+    }
+  }
 
   const result = useMemo(() => {
     if (!safeHours) return null;
+    if (!name.trim()) return null;
+    if (!isValidYmd(startYmd)) return null;
+    if (deadlineYmd.trim() && !isValidYmd(deadlineYmd.trim())) return null;
+    if (deadlineYmd.trim() && deadlineYmd.trim() < startYmd) return null;
+
     return evaluateNewWork(before, input);
-  }, [before, input.startWeekIndex, input.deadlineWeekIndex, input.totalHours, name, safeHours]);
+  }, [before, name, safeHours, startYmd, deadlineYmd]);
+
+  const horizonHint =
+    before.horizonWeeks.length > 0
+      ? `${before.horizonWeeks[0].weekStartYmd} → ${before.horizonWeeks[before.horizonWeeks.length - 1].weekEndYmd}`
+      : "";
+
+  const viewLabel =
+    view === "month"
+      ? "Current month"
+      : view === "4w"
+      ? "Next 4 weeks"
+      : view === "12w"
+      ? "12 weeks"
+      : view === "quarter"
+      ? "Quarter"
+      : "6 months";
 
   return (
     <section className="grid gap-4 md:grid-cols-3">
@@ -78,6 +171,30 @@ export function EvaluateClient({ before }: { before: DashboardSnapshot }) {
             <CardTitle className="text-sm font-medium text-muted-foreground">Inputs</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
+            {/* View */}
+            <div className="space-y-2">
+              <Label>View window</Label>
+              <Select value={view} onValueChange={(v) => setViewInUrl(v as ViewKey)}>
+                <SelectTrigger className="rounded-xl">
+                  <SelectValue placeholder="Choose a view" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="month">Current month</SelectItem>
+                  <SelectItem value="4w">Next 4 weeks</SelectItem>
+                  <SelectItem value="12w">12 weeks</SelectItem>
+                  <SelectItem value="quarter">Quarter</SelectItem>
+                  <SelectItem value="6m">6 months</SelectItem>
+                </SelectContent>
+              </Select>
+              {horizonHint && (
+                <p className="text-xs text-muted-foreground">
+                  {viewLabel}: {horizonHint}
+                </p>
+              )}
+            </div>
+
+            <Separator />
+
             <div className="space-y-2">
               <Label htmlFor="name">Work name</Label>
               <Input id="name" value={name} onChange={(e) => setName(e.target.value)} />
@@ -92,39 +209,58 @@ export function EvaluateClient({ before }: { before: DashboardSnapshot }) {
                 onChange={(e) => setHours(e.target.value)}
               />
               <p className="text-xs text-muted-foreground">
-                Distributed uniformly across selected weeks.
+                Distributed uniformly across the selected date range (weekly buckets).
               </p>
             </div>
 
             <div className="space-y-2">
-              <Label>Start week</Label>
-              <Select value={startWeek} onValueChange={setStartWeek}>
-                <SelectTrigger className="rounded-xl">
-                  <SelectValue placeholder="Choose start week" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="0">W1</SelectItem>
-                  <SelectItem value="1">W2</SelectItem>
-                  <SelectItem value="2">W3</SelectItem>
-                  <SelectItem value="3">W4</SelectItem>
-                </SelectContent>
-              </Select>
+              <Label htmlFor="startYmd">Start date</Label>
+              <Input
+                id="startYmd"
+                type="date"
+                value={startYmd}
+                onChange={(e) => setStartYmd(e.target.value)}
+              />
             </div>
 
             <div className="space-y-2">
-              <Label>Deadline week (optional)</Label>
-              <Select value={deadlineWeek} onValueChange={setDeadlineWeek}>
-                <SelectTrigger className="rounded-xl">
-                  <SelectValue placeholder="No deadline" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">No deadline (to W4)</SelectItem>
-                  <SelectItem value="0">W1</SelectItem>
-                  <SelectItem value="1">W2</SelectItem>
-                  <SelectItem value="2">W3</SelectItem>
-                  <SelectItem value="3">W4</SelectItem>
-                </SelectContent>
-              </Select>
+              <Label htmlFor="deadlineYmd">Deadline date (optional)</Label>
+              <Input
+                id="deadlineYmd"
+                type="date"
+                value={deadlineYmd}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setDeadlineYmd(v);
+                  maybeAutoExpandToDeadline(v);
+                }}
+              />
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="rounded-xl"
+                  onClick={() => setDeadlineYmd("")}
+                  disabled={isPending || !deadlineYmd}
+                >
+                  Clear deadline
+                </Button>
+
+                {viewEnd ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="rounded-xl"
+                    onClick={() => {
+                      setDeadlineYmd(viewEnd);
+                      maybeAutoExpandToDeadline(viewEnd);
+                    }}
+                    disabled={isPending}
+                  >
+                    Set to end of view
+                  </Button>
+                ) : null}
+              </div>
             </div>
 
             <Separator />
@@ -132,25 +268,29 @@ export function EvaluateClient({ before }: { before: DashboardSnapshot }) {
             <Button
               className="w-full rounded-xl"
               type="button"
-              disabled={isPending || safeHours <= 0 || !name.trim()}
+              disabled={
+                isPending ||
+                safeHours <= 0 ||
+                !name.trim() ||
+                !isValidYmd(startYmd) ||
+                (deadlineYmd.trim() ? !isValidYmd(deadlineYmd.trim()) : false) ||
+                (deadlineYmd.trim() ? deadlineYmd.trim() < startYmd : false)
+              }
               onClick={() => {
                 startTransition(async () => {
                   try {
                     const res = await commitWork({
                       name,
                       totalHours: safeHours,
-                      startWeekIndex: Number(startWeek),
-                      deadlineWeekIndex: deadlineWeek === "none" ? undefined : Number(deadlineWeek),
+                      startYmd: startYmd.trim(),
+                      deadlineYmd: deadlineYmd.trim() ? deadlineYmd.trim() : undefined,
                     });
 
                     toast.success("Work committed", {
                       description: `Saved as ${res.id.slice(0, 8)}…`,
                     });
 
-                    // Refresh server-fetched baseline (DB-backed "before")
                     router.refresh();
-
-                    // Optional: clear hours after commit (signals "accepted")
                     setHours("");
                   } catch (e: any) {
                     toast.error("Could not commit work", {
@@ -179,7 +319,7 @@ export function EvaluateClient({ before }: { before: DashboardSnapshot }) {
           <CardContent className="space-y-5">
             {!result ? (
               <p className="text-sm text-muted-foreground">
-                Enter hours to see impact across the next 4 weeks.
+                Enter hours and dates to see impact across the current view.
               </p>
             ) : (
               <>
@@ -295,9 +435,14 @@ export function EvaluateClient({ before }: { before: DashboardSnapshot }) {
                       const afterBucket = bucketFromUtilization(afterPct);
 
                       return (
-                        <div key={afterWeek.weekLabel} className="space-y-2">
+                        <div key={afterWeek.weekStartYmd} className="space-y-2">
                           <div className="flex items-center justify-between text-sm">
-                            <span className="font-medium">{afterWeek.weekLabel}</span>
+                            <span className="font-medium">
+                              {afterWeek.weekLabel}{" "}
+                              <span className="text-muted-foreground font-normal">
+                                ({afterWeek.weekStartYmd} → {afterWeek.weekEndYmd})
+                              </span>
+                            </span>
                             <span className="text-muted-foreground">
                               {beforePct}% → {afterPct}%
                               {afterPct > 100 && (
@@ -316,7 +461,8 @@ export function EvaluateClient({ before }: { before: DashboardSnapshot }) {
                           </div>
 
                           <div className="text-xs text-muted-foreground">
-                            {Math.round(beforeWeek.committedHours)}h → {Math.round(afterWeek.committedHours)}h (
+                            {Math.round(beforeWeek.committedHours)}h →{" "}
+                            {Math.round(afterWeek.committedHours)}h (
                             +{Math.max(0, Math.round(afterWeek.committedHours - beforeWeek.committedHours))}h)
                           </div>
                         </div>
@@ -332,4 +478,5 @@ export function EvaluateClient({ before }: { before: DashboardSnapshot }) {
     </section>
   );
 }
+
 

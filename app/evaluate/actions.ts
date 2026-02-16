@@ -7,23 +7,20 @@ import { MVP_TEAM_ID } from "@/lib/mvpTeam";
 export type CommitWorkInput = {
   name: string;
   totalHours: number;
-  startWeekIndex: number; // 0..3
-  deadlineWeekIndex?: number; // 0..3 | undefined
+  startYmd: string;      // "YYYY-MM-DD"
+  deadlineYmd?: string;  // "YYYY-MM-DD" | undefined
 };
 
-function clamp(n: number, min: number, max: number) {
-  return Math.max(min, Math.min(max, n));
-}
+function isValidYmd(s: string): boolean {
+  // Basic MVP check: YYYY-MM-DD
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
 
-function addDaysUTC(date: Date, days: number) {
-  const d = new Date(date.getTime());
-  d.setUTCDate(d.getUTCDate() + days);
-  return d;
-}
+  // Validate it's a real calendar date
+  const d = new Date(`${s}T00:00:00Z`);
+  if (Number.isNaN(d.getTime())) return false;
 
-function toDateStringUTC(date: Date) {
-  // YYYY-MM-DD
-  return date.toISOString().slice(0, 10);
+  // Ensure round-trip matches (catches 2026-02-31)
+  return d.toISOString().slice(0, 10) === s;
 }
 
 export async function commitWork(input: CommitWorkInput) {
@@ -36,45 +33,28 @@ export async function commitWork(input: CommitWorkInput) {
     throw new Error("Total hours must be > 0.");
   }
 
-  const startWeekIndex = clamp(Number(input.startWeekIndex), 0, 3);
-  const deadlineWeekIndex =
-    typeof input.deadlineWeekIndex === "number"
-      ? clamp(Number(input.deadlineWeekIndex), 0, 3)
-      : undefined;
+  const startYmd = (input.startYmd ?? "").trim();
+  if (!isValidYmd(startYmd)) {
+    throw new Error("startYmd must be a valid date in YYYY-MM-DD format.");
+  }
 
-  if (typeof deadlineWeekIndex === "number" && deadlineWeekIndex < startWeekIndex) {
-    throw new Error("Deadline week cannot be before start week.");
+  const deadlineYmd = (input.deadlineYmd ?? "").trim() || undefined;
+  if (deadlineYmd && !isValidYmd(deadlineYmd)) {
+    throw new Error("deadlineYmd must be a valid date in YYYY-MM-DD format.");
+  }
+
+  if (deadlineYmd && deadlineYmd < startYmd) {
+    throw new Error("Deadline cannot be before start date.");
   }
 
   const supabase = supabaseServer();
-
-  // Load team cycle start date so we can convert week indices to dates
-  const { data: team, error: teamErr } = await supabase
-    .from("teams")
-    .select("cycle_start_date")
-    .eq("id", MVP_TEAM_ID)
-    .single();
-
-  if (teamErr) throw new Error(teamErr.message);
-  if (!team?.cycle_start_date) throw new Error("Team cycle_start_date is missing.");
-
-  const cycleStart = new Date(`${team.cycle_start_date}T00:00:00Z`);
-
-  const startDate = addDaysUTC(cycleStart, startWeekIndex * 7);
-
-  // If deadline week is set, choose a date inside that week.
-  // We'll use the LAST day of that week (start + 6 days) to represent "end of week".
-  const deadlineDate =
-    typeof deadlineWeekIndex === "number"
-      ? addDaysUTC(addDaysUTC(cycleStart, deadlineWeekIndex * 7), 6)
-      : null;
 
   const payload = {
     team_id: MVP_TEAM_ID,
     name,
     estimated_hours: totalHours,
-    start_date: toDateStringUTC(startDate),
-    deadline: deadlineDate ? toDateStringUTC(deadlineDate) : null,
+    start_date: startYmd,
+    deadline: deadlineYmd ?? null,
   };
 
   const { data, error } = await supabase

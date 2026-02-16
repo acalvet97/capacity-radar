@@ -4,8 +4,8 @@ import type { DashboardSnapshot, WeekSnapshot, Bucket } from "@/lib/dashboardEng
 export type NewWorkInput = {
   name: string;
   totalHours: number;
-  startWeekIndex: number; // 0..3
-  deadlineWeekIndex?: number; // 0..3
+  startYmd: string;      // "YYYY-MM-DD"
+  deadlineYmd?: string;  // "YYYY-MM-DD" (optional)
 };
 
 export type EvaluateResult = {
@@ -19,7 +19,9 @@ export type EvaluateResult = {
   applied: {
     weeksCount: number;
     perWeekHours: number;
-    weekRangeLabel: string;
+    weekRangeLabel: string; // e.g. "2026-02-16 → 2026-03-08"
+    startIdx: number;
+    endIdx: number;
   };
 };
 
@@ -31,22 +33,55 @@ const bucketFromUtilization = (pct: number): Bucket => {
 
 const round1 = (n: number) => Math.round(n * 10) / 10;
 
+function clamp(n: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, n));
+}
+
+/**
+ * Map a YYYY-MM-DD date into a week bucket index.
+ * Uses string compare because YYYY-MM-DD sorts lexicographically.
+ * If outside horizon, clamps to first/last bucket.
+ */
+function weekIndexForYmd(horizonWeeks: WeekSnapshot[], ymd: string): number {
+  if (!horizonWeeks.length) return 0;
+
+  const idx = horizonWeeks.findIndex(
+    (w) => w.weekStartYmd <= ymd && ymd <= w.weekEndYmd
+  );
+  if (idx !== -1) return idx;
+
+  if (ymd < horizonWeeks[0].weekStartYmd) return 0;
+  return horizonWeeks.length - 1;
+}
+
+/**
+ * Apply new work uniformly across the weeks determined by startYmd..deadlineYmd,
+ * clamped to the current view horizon.
+ */
 export function applyWorkToHorizon(
   horizonWeeks: WeekSnapshot[],
   input: NewWorkInput
 ): WeekSnapshot[] {
-  const start = clamp(input.startWeekIndex, 0, horizonWeeks.length - 1);
-  const endRaw =
-    typeof input.deadlineWeekIndex === "number"
-      ? input.deadlineWeekIndex
-      : horizonWeeks.length - 1;
-  const end = clamp(endRaw, start, horizonWeeks.length - 1);
+  if (!horizonWeeks.length) return horizonWeeks;
 
-  const weeksCount = end - start + 1;
+  const startIdx = clamp(
+    weekIndexForYmd(horizonWeeks, input.startYmd),
+    0,
+    horizonWeeks.length - 1
+  );
+
+  const endIdxRaw =
+    typeof input.deadlineYmd === "string" && input.deadlineYmd.length
+      ? weekIndexForYmd(horizonWeeks, input.deadlineYmd)
+      : horizonWeeks.length - 1;
+
+  const endIdx = clamp(endIdxRaw, startIdx, horizonWeeks.length - 1);
+
+  const weeksCount = endIdx - startIdx + 1;
   const perWeek = input.totalHours / weeksCount;
 
   return horizonWeeks.map((w, idx) => {
-    if (idx < start || idx > end) return w;
+    if (idx < startIdx || idx > endIdx) return w;
     return {
       ...w,
       committedHours: round1(w.committedHours + perWeek),
@@ -54,18 +89,31 @@ export function applyWorkToHorizon(
   });
 }
 
-export function recomputeSnapshot(base: DashboardSnapshot, newHorizon: WeekSnapshot[]): DashboardSnapshot {
+/**
+ * Recompute snapshot KPIs from a modified horizon.
+ * Note: totalCapacityHours here is the sum of bucket capacities in the *current view*
+ * (which matches the updated dashboardEngine behavior for variable horizons).
+ */
+export function recomputeSnapshot(
+  base: DashboardSnapshot,
+  newHorizon: WeekSnapshot[]
+): DashboardSnapshot {
   const totalCommittedHours = Math.round(newHorizon.reduce((a, w) => a + w.committedHours, 0));
   const totalCapacityHours = Math.round(newHorizon.reduce((a, w) => a + w.capacityHours, 0));
 
   const maxUtilizationPct = Math.round(
-    Math.max(...newHorizon.map((w) => (w.committedHours / w.capacityHours) * 100))
+    Math.max(
+      ...newHorizon.map((w) =>
+        w.capacityHours > 0 ? (w.committedHours / w.capacityHours) * 100 : 0
+      )
+    )
   );
 
-  const overallUtilizationPct = Math.round((totalCommittedHours / totalCapacityHours) * 100);
+  const overallUtilizationPct =
+    totalCapacityHours > 0 ? Math.round((totalCommittedHours / totalCapacityHours) * 100) : 0;
 
-  // Keep weeksEquivalent definition consistent with your earlier approach:
-  // committed hours divided by "one week capacity" (assumes stable weekly capacity)
+  // Keep weeksEquivalent definition consistent:
+  // committed hours divided by one-week capacity (assumes stable weekly capacity).
   const weeklyCapacity = newHorizon[0]?.capacityHours || 1;
   const weeksEquivalent = round1(totalCommittedHours / weeklyCapacity);
 
@@ -81,20 +129,34 @@ export function recomputeSnapshot(base: DashboardSnapshot, newHorizon: WeekSnaps
   };
 }
 
+/**
+ * Evaluate new work impact on an already-built horizon (the "view").
+ * If the input dates are outside the current horizon, this will clamp.
+ * (In UX, you can choose to expand the view before calling this.)
+ */
 export function evaluateNewWork(before: DashboardSnapshot, input: NewWorkInput): EvaluateResult {
   const afterHorizon = applyWorkToHorizon(before.horizonWeeks, input);
   const after = recomputeSnapshot(before, afterHorizon);
 
-  const start = clamp(input.startWeekIndex, 0, before.horizonWeeks.length - 1);
-  const endRaw =
-    typeof input.deadlineWeekIndex === "number"
-      ? input.deadlineWeekIndex
-      : before.horizonWeeks.length - 1;
-  const end = clamp(endRaw, start, before.horizonWeeks.length - 1);
+  const startIdx = clamp(
+    weekIndexForYmd(before.horizonWeeks, input.startYmd),
+    0,
+    before.horizonWeeks.length - 1
+  );
 
-  const weeksCount = end - start + 1;
+  const endIdxRaw =
+    typeof input.deadlineYmd === "string" && input.deadlineYmd.length
+      ? weekIndexForYmd(before.horizonWeeks, input.deadlineYmd)
+      : before.horizonWeeks.length - 1;
+
+  const endIdx = clamp(endIdxRaw, startIdx, before.horizonWeeks.length - 1);
+
+  const weeksCount = endIdx - startIdx + 1;
   const perWeekHours = round1(input.totalHours / weeksCount);
-  const weekRangeLabel = `W${start + 1}–W${end + 1}`;
+
+  const startBucket = before.horizonWeeks[startIdx];
+  const endBucket = before.horizonWeeks[endIdx];
+  const weekRangeLabel = `${startBucket.weekStartYmd} → ${endBucket.weekEndYmd}`;
 
   return {
     before,
@@ -104,10 +166,6 @@ export function evaluateNewWork(before: DashboardSnapshot, input: NewWorkInput):
       maxUtilizationPct: after.maxUtilizationPct - before.maxUtilizationPct,
       overallUtilizationPct: after.overallUtilizationPct - before.overallUtilizationPct,
     },
-    applied: { weeksCount, perWeekHours, weekRangeLabel },
+    applied: { weeksCount, perWeekHours, weekRangeLabel, startIdx, endIdx },
   };
-}
-
-function clamp(n: number, min: number, max: number) {
-  return Math.max(min, Math.min(max, n));
 }
