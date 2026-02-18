@@ -27,15 +27,15 @@ type Bucket = "low" | "medium" | "high";
 const bucketLabel = (b: Bucket) => (b === "low" ? "LOW" : b === "medium" ? "MEDIUM" : "HIGH");
 
 const badgeStyles: Record<Bucket, string> = {
-  low: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20",
-  medium: "bg-amber-500/10 text-amber-600 border-amber-500/20",
-  high: "bg-red-500/10 text-red-600 border-red-500/20",
+  low: "bg-emerald-600/10 text-emerald-700 border-emerald-600/20",
+  medium: "bg-amber-600/10 text-amber-700 border-amber-600/20",
+  high: "bg-rose-600/10 text-rose-700 border-rose-600/20",
 };
 
 const barFill: Record<Bucket, string> = {
-  low: "bg-emerald-500",
-  medium: "bg-amber-500",
-  high: "bg-red-500",
+  low: "bg-emerald-600",
+  medium: "bg-amber-600",
+  high: "bg-rose-600",
 };
 
 const bucketFromUtilization = (pct: number): Bucket => {
@@ -45,7 +45,7 @@ const bucketFromUtilization = (pct: number): Bucket => {
 };
 
 function normalizeView(raw: unknown): ViewKey {
-  // ✅ handle string | string[] | undefined
+  // handle string | string[] | undefined
   const v =
     typeof raw === "string"
       ? raw
@@ -160,23 +160,31 @@ export default async function DashboardPage({
       : "6 months";
 
   return (
-    <main className="mx-auto max-w-6xl p-6 space-y-10">
-      <header className="space-y-4 mb-10">
-        <h1 className="text-3xl font-semibold tracking-tight">Dashboard</h1>
-        <div className="flex items-center gap-3">
-          <span className="text-sm font-medium text-foreground">View</span>
-          <DashboardViewSelector view={view} horizonHint={horizonHint} />
+    <main className="mx-auto max-w-6xl py-[52px] px-4 space-y-10">
+      <header className="mb-[52px]">
+        <div className="flex items-center justify-between mb-2">
+          <h1 className="text-[2rem] font-semibold tracking-tight">Dashboard</h1>
+          <div className="flex items-center gap-3">
+            <span className="text-sm font-medium text-foreground">View:</span>
+            <DashboardViewSelector view={view} />
+          </div>
         </div>
+        {horizonHint && (
+          <p className="text-sm">
+            <span className="text-foreground">Showing data for:</span>{" "}
+            <span className="text-muted-foreground">{horizonHint.replace(" → ", " -> ")}</span>
+          </p>
+        )}
       </header>
 
       {/* KPIs — Risk first, context second. 4-col: primary 2, others 1 each. */}
       <section className="grid gap-4 md:grid-cols-4" aria-label="Overview">
         {/* Tier 1: Primary — Max Utilization + Exposure (2 cols) */}
-        <Card className="rounded-md md:col-span-2">
-          <CardContent className="pt-4 pb-4">
+        <Card className="rounded-md md:col-span-2 flex flex-col justify-end">
+          <CardContent className="py-0">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
               <div>
-                <div className="text-3xl font-semibold tracking-tight">
+                <div className="text-5xl font-semibold tracking-tight">
                   {snapshot.maxUtilizationPct}%
                 </div>
                 <PeakLoadLabel />
@@ -196,18 +204,15 @@ export default async function DashboardPage({
         <Card className="rounded-md">
           <CardHeader className="pb-1">
             <CardTitleWithTooltip
-              title="Committed"
+              title="Total committed"
               tooltip={snapshot.bufferHoursPerWeek > 0 ? `Includes ${snapshot.bufferHoursPerWeek}h/week buffer.` : undefined}
-              className="text-xs font-medium text-muted-foreground"
+              className="text-sm font-medium text-muted-foreground"
             />
           </CardHeader>
           <CardContent className="space-y-0.5">
-            <div className="text-xl font-semibold tracking-tight">
+            <div className="text-2xl font-semibold tracking-tight">
               {snapshot.totalCommittedHours}h / {snapshot.totalCapacityHours}h
             </div>
-            <p className="text-xs text-muted-foreground">
-              {snapshot.overallUtilizationPct}%
-            </p>
           </CardContent>
         </Card>
 
@@ -215,13 +220,13 @@ export default async function DashboardPage({
         <Card className="rounded-md">
           <CardHeader className="pb-1">
             <CardTitleWithTooltip
-              title="Weeks"
+              title="Weeks equivalence"
               tooltip="Total committed expressed as weeks of team capacity."
-              className="text-xs font-medium text-muted-foreground"
+              className="text-sm font-medium text-muted-foreground"
             />
           </CardHeader>
           <CardContent className="space-y-0.5">
-            <div className="text-xl font-semibold tracking-tight">
+            <div className="text-2xl font-semibold tracking-tight">
               {snapshot.weeksEquivalent}w
             </div>
           </CardContent>
@@ -233,7 +238,7 @@ export default async function DashboardPage({
         <div className="md:col-span-2">
           <Card className="rounded-md">
             <CardHeader>
-              <h2 className="text-base font-semibold">Capacity ({viewLabel})</h2>
+              <h2 className="text-base font-semibold">Capacity overview</h2>
             </CardHeader>
             <CardContent className="space-y-4">
               {horizonWeeksForView.map((week) => {
@@ -267,7 +272,7 @@ export default async function DashboardPage({
                             utilization
                           </span>
                           {utilization > 100 && (
-                            <span className="text-red-600">
+                            <span className="text-rose-600">
                               +{utilization - 100}% over capacity
                             </span>
                           )}
@@ -299,17 +304,17 @@ export default async function DashboardPage({
           <Card className="rounded-md">
             <CardHeader>
               <CardTitleWithTooltip
-                title="At risk"
+                title="Weeks at risk"
                 tooltip="Weeks above 90% utilization."
                 as="h2"
-                className="text-base font-semibold"
+                className="text-sm font-medium text-muted-foreground"
               />
             </CardHeader>
             <CardContent className="space-y-2">
               {atRiskWeeks.length > 0 ? (
                 atRiskWeeks.map((week) => (
-                  <div key={week.weekStartYmd} className="flex items-center justify-between text-sm">
-                    <span className="font-medium">{week.weekLabel}</span>
+                  <div key={week.weekStartYmd} className="flex items-center justify-between text-xl">
+                    <span className="text-xl font-medium">{week.weekLabel}</span>
                     <Badge variant="outline" className={badgeStyles[week.bucket]}>
                       {week.utilizationPct}%
                     </Badge>

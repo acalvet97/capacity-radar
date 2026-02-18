@@ -16,7 +16,7 @@ export function DashboardViewSelector({
   horizonHint,
 }: {
   view: ViewKey;
-  horizonHint: string;
+  horizonHint?: string;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -31,25 +31,18 @@ export function DashboardViewSelector({
   }
 
   return (
-    <div className="flex items-center gap-3">
-      <Select value={view} onValueChange={(v) => setViewInUrl(v as ViewKey)}>
-        <SelectTrigger className="rounded-md min-w-[160px]">
-          <SelectValue placeholder="Choose a view" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="month">Current month</SelectItem>
-          <SelectItem value="4w">Next 4 weeks</SelectItem>
-          <SelectItem value="12w">Next 12 weeks</SelectItem>
-          <SelectItem value="quarter">Current Quarter</SelectItem>
-          <SelectItem value="6m">6 months</SelectItem>
-        </SelectContent>
-      </Select>
-      {horizonHint && (
-        <span className="text-xs text-muted-foreground whitespace-nowrap">
-          {horizonHint}
-        </span>
-      )}
-    </div>
+    <Select value={view} onValueChange={(v) => setViewInUrl(v as ViewKey)}>
+      <SelectTrigger className="rounded-md min-w-[160px]">
+        <SelectValue placeholder="Choose a view" />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="month">Current month</SelectItem>
+        <SelectItem value="4w">Next 4 weeks</SelectItem>
+        <SelectItem value="12w">Next 12 weeks</SelectItem>
+        <SelectItem value="quarter">Current Quarter</SelectItem>
+        <SelectItem value="6m">6 months</SelectItem>
+      </SelectContent>
+    </Select>
   );
 }
 

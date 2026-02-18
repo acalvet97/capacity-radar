@@ -4,9 +4,8 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { toast } from "sonner";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -28,16 +27,10 @@ import { commitWork } from "@/app/evaluate/actions";
 type Bucket = "low" | "medium" | "high";
 type ViewKey = "month" | "4w" | "12w" | "quarter" | "6m";
 
-const badgeStyles: Record<Bucket, string> = {
-  low: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20",
-  medium: "bg-amber-500/10 text-amber-600 border-amber-500/20",
-  high: "bg-red-500/10 text-red-600 border-red-500/20",
-};
-
 const barFill: Record<Bucket, string> = {
-  low: "bg-emerald-500",
-  medium: "bg-amber-500",
-  high: "bg-red-500",
+  low: "bg-emerald-600",
+  medium: "bg-amber-600",
+  high: "bg-rose-600",
 };
 
 const bucketFromUtilization = (pct: number): Bucket => {
@@ -159,7 +152,7 @@ export function EvaluateClient({ before, view }: { before: DashboardSnapshot; vi
       <div>
         <Card className="rounded-md">
           <CardHeader>
-            <h2 className="text-base font-semibold">Inputs</h2>
+            <h2 className="text-base font-semibold">Work to evaluate</h2>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
@@ -319,98 +312,47 @@ export function EvaluateClient({ before, view }: { before: DashboardSnapshot; vi
       </div>
 
       {/* Results */}
-      <div className="md:col-span-2">
-        <Card className="rounded-md">
-          <CardHeader>
-            <h2 className="text-base font-semibold">Simulation result</h2>
-          </CardHeader>
-          <CardContent className="space-y-6">
+      <div className="md:col-span-2 bg-background">
+        <div className="space-y-6">
+          <h2 className="text-base font-semibold">Simulation result</h2>
             {!result ? (
               <p className="text-sm text-muted-foreground">
                 Enter hours and dates to see impact.
               </p>
             ) : (
               <>
-                {/* Summary cards */}
-                <div className="grid gap-4 md:grid-cols-3">
-                  <Card className="rounded-md">
-                    <CardHeader className="pb-2">
-                      <div className="flex items-center gap-1.5">
-                        <CardTitle className="text-xs font-medium text-muted-foreground">
-                          Exposure
-                        </CardTitle>
-                        <InfoTooltip content="Based on highest weekly utilization in this view." />
+                {/* Hero: decision signal */}
+                <div className="pt-8 pb-8">
+                  <div className="mb-5 flex items-center gap-2 text-sm text-muted-foreground">
+                    <span>Peak exposure: {bucketLabel(result.after.exposureBucket as Bucket)}</span>
+                    <InfoTooltip content="Based on highest weekly utilization in this view." />
+                  </div>
+                  <div className="space-y-0.5">
+                    <div className="text-5xl font-bold tracking-tight tabular-nums leading-none">
+                      {result.after.maxUtilizationPct}%
+                    </div>
+                    <div className="text-lg text-muted-foreground leading-tight">Peak week</div>
+                    {result.after.maxUtilizationPct > 100 && (
+                      <div className="text-base font-medium text-rose-600 tabular-nums">
+                        +{result.after.maxUtilizationPct - 100}% over capacity
                       </div>
-                    </CardHeader>
-                    <CardContent className="flex items-center justify-between">
-                      <div className="text-lg font-semibold">
-                        {bucketLabel(result.after.exposureBucket as Bucket)}
-                      </div>
-                      <Badge
-                        variant="outline"
-                        className={badgeStyles[result.after.exposureBucket as Bucket]}
-                      >
-                        {result.after.maxUtilizationPct}% max
-                      </Badge>
-                    </CardContent>
-                  </Card>
+                    )}
+                  </div>
+                </div>
 
-                  <Card className="rounded-md">
-                    <CardHeader className="pb-2">
-                      <div className="flex items-center gap-1.5">
-                        <CardTitle className="text-xs font-medium text-muted-foreground">
-                          Committed
-                        </CardTitle>
-                        {result.after.bufferHoursPerWeek > 0 && (
-                          <InfoTooltip content={`Total includes ${result.after.bufferHoursPerWeek}h/week buffer.`} />
-                        )}
-                      </div>
-                    </CardHeader>
-                    <CardContent className="space-y-1">
-                      <div className="text-lg font-semibold">
-                        {result.after.totalCommittedHours}h{" "}
-                        <span className="text-muted-foreground font-medium">
-                          / {result.after.totalCapacityHours}h
-                        </span>
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        {result.after.overallUtilizationPct}% of capacity
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <Card className="rounded-md">
-                    <CardHeader className="pb-2">
-                      <div className="flex items-center gap-1.5">
-                        <CardTitle className="text-xs font-medium text-muted-foreground">
-                          Distribution
-                        </CardTitle>
-                        {result.applied.allocationMode === "fill_capacity" && (
-                          <InfoTooltip content="Allocation capped by weekly capacity." />
-                        )}
-                      </div>
-                    </CardHeader>
-                    <CardContent className="space-y-1">
-                      <div className="text-lg font-semibold">
-                        {formatDateDdMmYyyy(result.before.horizonWeeks[result.applied.startIdx].weekStartYmd)} → {formatDateDdMmYyyy(result.before.horizonWeeks[result.applied.endIdx].weekEndYmd)}
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        {result.applied.allocationMode === "even" ? (
-                          <>
-                            {result.applied.perWeekHours}h/week · {result.applied.weeksCount} weeks
-                          </>
-                        ) : (
-                          <>
-                            {result.applied.weeksCount} week{result.applied.weeksCount !== 1 ? "s" : ""}
-                          </>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
+                {/* Supporting metrics: muted, inline */}
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground pb-8">
+                  <span className="tabular-nums">
+                    {result.after.totalCommittedHours}h / {result.after.totalCapacityHours}h
+                  </span>
+                  <span className="tabular-nums">{result.after.overallUtilizationPct}% utilization</span>
+                  <span className="tabular-nums">
+                    {result.applied.weeksCount} week{result.applied.weeksCount !== 1 ? "s" : ""}
+                  </span>
                 </div>
 
                 {/* Week-by-week */}
-                <div className="space-y-3 pt-6 mt-6 border-t">
+                <div className="space-y-3 pt-8">
                   <h3 className="text-sm font-medium text-muted-foreground">Weekly impact</h3>
 
                   <div className="space-y-4">
@@ -441,7 +383,7 @@ export function EvaluateClient({ before, view }: { before: DashboardSnapshot; vi
                             <div className="text-xs tabular-nums">
                               {beforePct}% → {afterPct}%
                               {afterPct > 100 && (
-                                <span className="text-red-600"> 🔴 +{afterPct - 100}%</span>
+                                <span className="text-rose-600"> +{afterPct - 100}%</span>
                               )}
                             </div>
                           </div>
@@ -466,8 +408,7 @@ export function EvaluateClient({ before, view }: { before: DashboardSnapshot; vi
                 </div>
               </>
             )}
-          </CardContent>
-        </Card>
+        </div>
       </div>
     </section>
   );

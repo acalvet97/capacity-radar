@@ -205,7 +205,7 @@ export function WorkItemsList(props: { teamId: string; items: WorkItemRow[] }) {
                       </div>
 
                       {errorMessage ? (
-                        <p className="text-xs text-red-600">{errorMessage}</p>
+                        <p className="text-xs text-rose-600">{errorMessage}</p>
                       ) : null}
 
                       <div className="flex justify-end gap-2">

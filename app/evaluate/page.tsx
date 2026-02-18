@@ -92,7 +92,7 @@ export default async function EvaluatePage({
   const viewBefore = recomputeSnapshot(before, before.horizonWeeks.slice(0, weeks));
 
   return (
-    <main className="mx-auto max-w-6xl p-6 space-y-10">
+    <main className="mx-auto max-w-6xl py-[52px] px-4 space-y-10">
       <header className="mb-10">
         <h1 className="text-3xl font-semibold tracking-tight">Evaluate</h1>
       </header>
