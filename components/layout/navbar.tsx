@@ -1,46 +1,65 @@
 "use client";
 
+import { ClipboardList, LayoutDashboard, Scale, Settings } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarGroup,
+  SidebarHeader,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+} from "@/components/ui/sidebar";
 
 const navItems = [
-  { label: "Dashboard", href: "/dashboard" },
-  { label: "Evaluate", href: "/evaluate" },
-  { label: "Settings", href: "/settings" },
+  { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+  { label: "Committed Work", href: "/committed-work", icon: ClipboardList },
+  { label: "Evaluate", href: "/evaluate", icon: Scale },
+  { label: "Settings", href: "/settings", icon: Settings },
 ];
 
-export function Navbar() {
+const SIDEBAR_WIDTH = "16rem";
+
+export function AppSidebar() {
   const pathname = usePathname();
 
   return (
-    <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="mx-auto flex max-w-6xl items-center justify-between p-4">
+    <div
+      className="fixed inset-y-0 left-0 z-50 flex h-screen w-[16rem] flex-col border-r border-sidebar-border"
+      style={{ width: SIDEBAR_WIDTH }}
+    >
+      <Sidebar collapsible="none" className="h-full w-full flex-1 flex-col">
+        <SidebarHeader>
         <Link
           href="/dashboard"
-          className="text-lg font-semibold tracking-tight"
+          className="text-xl font-bold tracking-tight text-sidebar-foreground hover:text-sidebar-foreground"
         >
-          Capacity Radar
+          klyra
         </Link>
-
-        <nav className="flex items-center gap-2">
-          {navItems.map((item) => {
-            const isActive = pathname === item.href;
-
-            return (
-              <Link key={item.href} href={item.href}>
-                <Button
-                  variant={isActive ? "default" : "ghost"}
-                  className={cn("rounded-md")}
-                >
-                  {item.label}
-                </Button>
-              </Link>
-            );
-          })}
-        </nav>
-      </div>
-    </header>
+      </SidebarHeader>
+      <SidebarContent>
+        <SidebarGroup>
+          <SidebarMenu>
+            {navItems.map((item) => {
+              const isActive = pathname === item.href;
+              const Icon = item.icon;
+              return (
+                <SidebarMenuItem key={item.href}>
+                  <SidebarMenuButton asChild isActive={isActive}>
+                    <Link href={item.href}>
+                      <Icon className="size-4 shrink-0" />
+                      <span>{item.label}</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              );
+            })}
+          </SidebarMenu>
+        </SidebarGroup>
+      </SidebarContent>
+      </Sidebar>
+    </div>
   );
 }

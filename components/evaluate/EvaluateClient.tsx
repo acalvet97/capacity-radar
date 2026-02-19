@@ -18,54 +18,24 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { InfoTooltip } from "@/components/ui/InfoTooltip";
 import { CollapsibleHelp } from "@/components/ui/CollapsibleHelp";
+import { WeekUtilizationBar } from "@/components/dashboard/WeekUtilizationBar";
 
 import type { DashboardSnapshot } from "@/lib/dashboardEngine";
-import { formatDateDdMmYyyy } from "@/lib/dates";
+import { exposureBucketFromUtilization } from "@/lib/dashboardEngine";
+import {
+  getViewLabel,
+  exposureBucketLabel,
+  type ViewKey,
+} from "@/lib/dashboardConstants";
+import { formatDateDdMmYyyy, isValidYmd, weeksBetweenIsoWeeksInclusive } from "@/lib/dates";
 import { evaluateNewWork, type NewWorkInput } from "@/lib/evaluateEngine";
 import { commitWork } from "@/app/evaluate/actions";
-
-type Bucket = "low" | "medium" | "high";
-type ViewKey = "month" | "4w" | "12w" | "quarter" | "6m";
-
-const barFill: Record<Bucket, string> = {
-  low: "bg-emerald-600",
-  medium: "bg-amber-600",
-  high: "bg-rose-600",
-};
-
-const bucketFromUtilization = (pct: number): Bucket => {
-  if (pct < 80) return "low";
-  if (pct <= 90) return "medium";
-  return "high";
-};
-
-const bucketLabel = (b: Bucket) => (b === "low" ? "LOW" : b === "medium" ? "MEDIUM" : "HIGH");
-
-function isValidYmd(ymd: string) {
-  return /^\d{4}-\d{2}-\d{2}$/.test(ymd);
-}
 
 function viewForNeededWeeks(neededWeeks: number): ViewKey {
   if (neededWeeks <= 4) return "4w";
   if (neededWeeks <= 12) return "12w";
   if (neededWeeks <= 13) return "quarter";
   return "6m";
-}
-
-function weeksBetweenIsoWeeksInclusive(startYmd: string, endYmd: string): number {
-  const start = new Date(`${startYmd}T00:00:00Z`);
-  const end = new Date(`${endYmd}T00:00:00Z`);
-
-  const startMondayIndex = (start.getUTCDay() + 6) % 7;
-  start.setUTCDate(start.getUTCDate() - startMondayIndex);
-
-  const endMonday = new Date(end);
-  const endMondayIndex = (endMonday.getUTCDay() + 6) % 7;
-  endMonday.setUTCDate(endMonday.getUTCDate() - endMondayIndex);
-
-  const ms = endMonday.getTime() - start.getTime();
-  const days = Math.floor(ms / (1000 * 60 * 60 * 24));
-  return Math.floor(days / 7) + 1;
 }
 
 export function EvaluateClient({ before, view }: { before: DashboardSnapshot; view: ViewKey }) {
@@ -105,7 +75,7 @@ export function EvaluateClient({ before, view }: { before: DashboardSnapshot; vi
 
   function maybeAutoExpandToDeadline(nextDeadlineYmd: string) {
     const d = nextDeadlineYmd.trim();
-    if (!d || !isValidYmd(d) || !viewEnd) return;
+    if (!d || !isValidYmd(d.trim()) || !viewEnd) return;
     if (d <= viewEnd) return;
 
     const neededWeeks = weeksBetweenIsoWeeksInclusive(startYmd || defaultStart, d);
@@ -122,7 +92,7 @@ export function EvaluateClient({ before, view }: { before: DashboardSnapshot; vi
   const result = useMemo(() => {
     if (!safeHours) return null;
     if (!name.trim()) return null;
-    if (!isValidYmd(startYmd)) return null;
+    if (!startYmd.trim() || !isValidYmd(startYmd.trim())) return null;
     if (deadlineYmd.trim() && !isValidYmd(deadlineYmd.trim())) return null;
     if (deadlineYmd.trim() && deadlineYmd.trim() < startYmd) return null;
 
@@ -136,16 +106,7 @@ export function EvaluateClient({ before, view }: { before: DashboardSnapshot; vi
         )}`
       : "";
 
-  const viewLabel =
-    view === "month"
-      ? "Current month"
-      : view === "4w"
-      ? "Next 4 weeks"
-      : view === "12w"
-      ? "Next 12 weeks"
-      : view === "quarter"
-      ? "Current Quarter"
-      : "6 months";
+  const viewLabel = getViewLabel(view);
 
   return (
     <section className="grid gap-8 md:grid-cols-3">
@@ -277,7 +238,8 @@ export function EvaluateClient({ before, view }: { before: DashboardSnapshot; vi
                 isPending ||
                 safeHours <= 0 ||
                 !name.trim() ||
-                !isValidYmd(startYmd) ||
+                !startYmd.trim() ||
+                !isValidYmd(startYmd.trim()) ||
                 (deadlineYmd.trim() ? !isValidYmd(deadlineYmd.trim()) : false) ||
                 (deadlineYmd.trim() ? deadlineYmd.trim() < startYmd : false)
               }
@@ -324,7 +286,7 @@ export function EvaluateClient({ before, view }: { before: DashboardSnapshot; vi
                 {/* Hero: decision signal */}
                 <div className="pt-8 pb-8">
                   <div className="mb-5 flex items-center gap-2 text-sm text-muted-foreground">
-                    <span>Peak exposure: {bucketLabel(result.after.exposureBucket as Bucket)}</span>
+                    <span>Peak exposure: {exposureBucketLabel(result.after.exposureBucket)}</span>
                     <InfoTooltip content="Based on highest weekly utilization in this view." />
                   </div>
                   <div className="space-y-0.5">
@@ -358,23 +320,12 @@ export function EvaluateClient({ before, view }: { before: DashboardSnapshot; vi
                   <div className="space-y-4">
                     {result.after.horizonWeeks.map((afterWeek, idx) => {
                       const beforeWeek = result.before.horizonWeeks[idx];
-
                       const beforePct = Math.round(
                         (beforeWeek.committedHours / beforeWeek.capacityHours) * 100
                       );
                       const afterPct = Math.round(
                         (afterWeek.committedHours / afterWeek.capacityHours) * 100
                       );
-
-                      const afterBucket = bucketFromUtilization(afterPct);
-                      const buffer = result.after.bufferHoursPerWeek;
-                      const workHours = Math.max(0, afterWeek.committedHours - buffer);
-                      const bufferPct = afterWeek.capacityHours > 0
-                        ? Math.min(100, (buffer / afterWeek.capacityHours) * 100)
-                        : 0;
-                      const workPct = afterWeek.capacityHours > 0
-                        ? Math.min(100 - bufferPct, (workHours / afterWeek.capacityHours) * 100)
-                        : Math.min(afterPct, 100);
 
                       return (
                         <div key={afterWeek.weekStartYmd} className="space-y-2">
@@ -387,20 +338,11 @@ export function EvaluateClient({ before, view }: { before: DashboardSnapshot; vi
                               )}
                             </div>
                           </div>
-
-                          <div className="h-2 w-full rounded-full bg-muted overflow-hidden flex">
-                            {buffer > 0 && bufferPct > 0 && (
-                              <div
-                                className="h-full bg-slate-400/40 shrink-0"
-                                style={{ width: `${bufferPct}%` }}
-                                title="Structural buffer"
-                              />
-                            )}
-                            <div
-                              className={`h-full shrink-0 ${barFill[afterBucket]}`}
-                              style={{ width: `${workPct}%` }}
-                            />
-                          </div>
+                          <WeekUtilizationBar
+                            capacityHours={afterWeek.capacityHours}
+                            committedHours={afterWeek.committedHours}
+                            bufferHoursPerWeek={result.after.bufferHoursPerWeek}
+                          />
                         </div>
                       );
                     })}

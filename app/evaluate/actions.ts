@@ -3,6 +3,7 @@
 
 import { supabaseServer } from "@/lib/supabaseServer";
 import { MVP_TEAM_ID } from "@/lib/mvpTeam";
+import { isValidYmd } from "@/lib/dates";
 
 export type CommitWorkInput = {
   name: string;
@@ -11,18 +12,6 @@ export type CommitWorkInput = {
   deadlineYmd?: string;  // "YYYY-MM-DD" | undefined
   allocationMode?: "even" | "fill_capacity"; // Defaults to "fill_capacity"
 };
-
-function isValidYmd(s: string): boolean {
-  // Basic MVP check: YYYY-MM-DD
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
-
-  // Validate it's a real calendar date
-  const d = new Date(`${s}T00:00:00Z`);
-  if (Number.isNaN(d.getTime())) return false;
-
-  // Ensure round-trip matches (catches 2026-02-31)
-  return d.toISOString().slice(0, 10) === s;
-}
 
 export async function commitWork(input: CommitWorkInput) {
   // Basic validation (MVP)

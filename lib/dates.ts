@@ -70,6 +70,43 @@ export function startOfIsoWeekUtc(d: Date): Date {
   return addDaysUtc(d, -mondayIndex);
 }
 
+/**
+ * End of ISO week (Sunday) for the week containing `d`.
+ */
+export function endOfIsoWeekUtc(d: Date): Date {
+  return addDaysUtc(startOfIsoWeekUtc(d), 6);
+}
+
+/**
+ * Difference in days (a - b). Uses UTC date semantics.
+ */
+export function diffDaysUtc(a: Date, b: Date): number {
+  const ms = a.getTime() - b.getTime();
+  return Math.floor(ms / (1000 * 60 * 60 * 24));
+}
+
+/**
+ * Number of ISO weeks between two YYYY-MM-DD dates (inclusive).
+ * Both dates are snapped to their ISO week; count includes start and end weeks.
+ */
+export function weeksBetweenIsoWeeksInclusive(startYmd: string, endYmd: string): number {
+  const start = startOfIsoWeekUtc(ymdToUtcDate(startYmd));
+  const end = startOfIsoWeekUtc(ymdToUtcDate(endYmd));
+  const days = diffDaysUtc(end, start);
+  return Math.floor(days / 7) + 1;
+}
+
+/**
+ * Validates a string is a real calendar date in YYYY-MM-DD format.
+ * Rejects invalid months/days (e.g. 2026-02-31).
+ */
+export function isValidYmd(s: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const d = new Date(`${s}T00:00:00Z`);
+  if (Number.isNaN(d.getTime())) return false;
+  return d.toISOString().slice(0, 10) === s;
+}
+
 export type WeekBucket = {
   key: string;           // e.g. "2026-02-16" (weekStartYmd)
   weekStartYmd: string;  // Monday

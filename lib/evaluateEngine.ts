@@ -1,5 +1,7 @@
 // lib/evaluateEngine.ts
-import type { DashboardSnapshot, WeekSnapshot, Bucket } from "@/lib/dashboardEngine";
+import type { DashboardSnapshot, WeekSnapshot } from "@/lib/dashboardEngine";
+import { exposureBucketFromUtilization } from "@/lib/dashboardEngine";
+import { clamp, round1 } from "@/lib/utils";
 
 export type AllocationMode = "even" | "fill_capacity";
 
@@ -28,18 +30,6 @@ export type EvaluateResult = {
     allocationMode: AllocationMode;
   };
 };
-
-const bucketFromUtilization = (pct: number): Bucket => {
-  if (pct < 80) return "low";
-  if (pct <= 90) return "medium";
-  return "high";
-};
-
-const round1 = (n: number) => Math.round(n * 10) / 10;
-
-function clamp(n: number, min: number, max: number) {
-  return Math.max(min, Math.min(max, n));
-}
 
 /**
  * Map a YYYY-MM-DD date into a week bucket index.
@@ -168,7 +158,7 @@ export function recomputeSnapshot(
     totalCapacityHours,
     overallUtilizationPct,
     maxUtilizationPct,
-    exposureBucket: bucketFromUtilization(maxUtilizationPct),
+    exposureBucket: exposureBucketFromUtilization(maxUtilizationPct),
     weeksEquivalent,
   };
 }

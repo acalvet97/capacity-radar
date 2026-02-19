@@ -1,7 +1,23 @@
 // lib/dashboardEngine.ts
 import { supabaseServer } from "@/lib/supabaseServer";
+import {
+  todayYmdInTz,
+  ymdToUtcDate,
+  utcDateToYmd,
+  addDaysUtc,
+  startOfIsoWeekUtc,
+  diffDaysUtc,
+} from "@/lib/dates";
+import { clamp, round1 } from "@/lib/utils";
 
 export type Bucket = "low" | "medium" | "high";
+
+/** Single source of truth: map utilization % to exposure bucket. */
+export function exposureBucketFromUtilization(pct: number): Bucket {
+  if (pct < 80) return "low";
+  if (pct <= 90) return "medium";
+  return "high";
+}
 
 export type WeekSnapshot = {
   weekLabel: string;      // e.g. "16 Feb - 22 Feb"
@@ -48,55 +64,6 @@ export type HorizonOptions = {
   tz?: string;
 };
 
-const bucketFromUtil = (pct: number): Bucket => {
-  if (pct < 80) return "low";
-  if (pct <= 90) return "medium";
-  return "high";
-};
-
-const round1 = (n: number) => Math.round(n * 10) / 10;
-
-function parseDateUTC(dateStr: string) {
-  // dateStr is "YYYY-MM-DD"
-  return new Date(`${dateStr}T00:00:00Z`);
-}
-
-function diffDaysUTC(a: Date, b: Date) {
-  // a - b in days
-  const ms = a.getTime() - b.getTime();
-  return Math.floor(ms / (1000 * 60 * 60 * 24));
-}
-
-function clamp(n: number, min: number, max: number) {
-  return Math.max(min, Math.min(max, n));
-}
-
-// ---- date helpers (no deps) ----
-
-function todayYmdInTz(tz: string) {
-  // en-CA -> YYYY-MM-DD
-  return new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(new Date());
-}
-
-function formatYmdUTC(d: Date) {
-  const y = d.getUTCFullYear();
-  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
-  const day = String(d.getUTCDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
-function addDaysUTC(d: Date, days: number) {
-  const out = new Date(d);
-  out.setUTCDate(out.getUTCDate() + days);
-  return out;
-}
-
-function startOfIsoWeekUTC(d: Date) {
-  // ISO week starts Monday
-  const mondayIndex = (d.getUTCDay() + 6) % 7; // Mon=0 ... Sun=6
-  return addDaysUTC(d, -mondayIndex);
-}
-
 function buildWeekLabel(weekStart: Date, weekEnd: Date, locale: string) {
   const fmt = new Intl.DateTimeFormat(locale, {
     timeZone: "UTC",
@@ -114,16 +81,16 @@ function buildHorizon(params: {
 }): WeekSnapshot[] {
   const { startYmd, weeks, weeklyCapacity, locale } = params;
 
-  const horizonStart = startOfIsoWeekUTC(parseDateUTC(startYmd));
+  const horizonStart = startOfIsoWeekUtc(ymdToUtcDate(startYmd));
 
   return Array.from({ length: weeks }).map((_, i) => {
-    const ws = addDaysUTC(horizonStart, i * 7);
-    const we = addDaysUTC(ws, 6);
+    const ws = addDaysUtc(horizonStart, i * 7);
+    const we = addDaysUtc(ws, 6);
 
     return {
       weekLabel: buildWeekLabel(ws, we, locale),
-      weekStartYmd: formatYmdUTC(ws),
-      weekEndYmd: formatYmdUTC(we),
+      weekStartYmd: utcDateToYmd(ws),
+      weekEndYmd: utcDateToYmd(we),
       capacityHours: round1(weeklyCapacity),
       committedHours: 0,
     };
@@ -208,8 +175,8 @@ export async function getDashboardSnapshotFromDb(
   if (wiErr) throw new Error(wiErr.message);
 
   // 4) Distribute work into horizon buckets (uniform per week)
-  const horizonStartDate = parseDateUTC(horizonWeeks[0].weekStartYmd);
-  const horizonEndDate = parseDateUTC(horizonWeeks[horizonWeeks.length - 1].weekEndYmd);
+  const horizonStartDate = ymdToUtcDate(horizonWeeks[0].weekStartYmd);
+  const horizonEndDate = ymdToUtcDate(horizonWeeks[horizonWeeks.length - 1].weekEndYmd);
 
   for (const item of workItems ?? []) {
     const hours = Number(item.estimated_hours ?? 0);
@@ -217,10 +184,10 @@ export async function getDashboardSnapshotFromDb(
 
     // If start_date is null: fallback to startYmd (view start)
     const itemStartYmd = (item.start_date ?? startYmd).trim();
-    const start = parseDateUTC(itemStartYmd);
+    const start = ymdToUtcDate(itemStartYmd);
 
     // deadline optional: if null => end at horizon end
-    const end = item.deadline ? parseDateUTC(item.deadline) : horizonEndDate;
+    const end = item.deadline ? ymdToUtcDate(item.deadline) : horizonEndDate;
 
     // Ignore if fully outside horizon
     if (end < horizonStartDate) continue;
@@ -231,16 +198,16 @@ export async function getDashboardSnapshotFromDb(
     const clampedEnd = end > horizonEndDate ? horizonEndDate : end;
 
     // Map to indices relative to horizonStart (ISO week Monday)
-    const horizonStart = parseDateUTC(horizonWeeks[0].weekStartYmd);
+    const horizonStart = ymdToUtcDate(horizonWeeks[0].weekStartYmd);
 
     const startIdx = clamp(
-      Math.floor(diffDaysUTC(clampedStart, horizonStart) / 7),
+      Math.floor(diffDaysUtc(clampedStart, horizonStart) / 7),
       0,
       horizonWeeks.length - 1
     );
 
     const endIdx = clamp(
-      Math.floor(diffDaysUTC(clampedEnd, horizonStart) / 7),
+      Math.floor(diffDaysUtc(clampedEnd, horizonStart) / 7),
       startIdx,
       horizonWeeks.length - 1
     );
@@ -316,7 +283,7 @@ export async function getDashboardSnapshotFromDb(
     cycleCapacityHours, // total capacity per 4-week cycle
     overallUtilizationPct,
     maxUtilizationPct,
-    exposureBucket: bucketFromUtil(maxUtilizationPct),
+    exposureBucket: exposureBucketFromUtilization(maxUtilizationPct),
     weeksEquivalent,
     bufferHoursPerWeek,
   };

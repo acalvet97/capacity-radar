@@ -9,7 +9,7 @@ export default async function SettingsPage() {
   const { bufferHoursPerWeek, weeklyCapacity } = await getTeamBufferAndCapacity(MVP_TEAM_ID);
 
   return (
-    <main className="mx-auto max-w-6xl py-[52px] px-4 space-y-10">
+    <main className="mx-auto max-w-6xl w-full py-[52px] px-4 space-y-10">
       <header className="mb-10">
         <h1 className="text-3xl font-semibold tracking-tight">Settings</h1>
       </header>

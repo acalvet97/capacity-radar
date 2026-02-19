@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import { Navbar } from "@/components/layout/navbar";
+import { AppSidebar } from "@/components/layout/navbar";
+import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-
 
 const inter = Inter({
   variable: "--font-inter",
@@ -22,8 +22,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en">
       <body className={`${inter.variable} min-h-screen bg-background antialiased font-sans`}>
         <TooltipProvider>
-          <Navbar />
-          {children}
+          <SidebarProvider>
+            <AppSidebar />
+            <SidebarInset className="ml-[16rem]">{children}</SidebarInset>
+          </SidebarProvider>
           <Toaster />
         </TooltipProvider>
       </body>

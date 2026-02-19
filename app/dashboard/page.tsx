@@ -5,7 +5,7 @@ export const revalidate = 0;
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MVP_TEAM_ID } from "@/lib/mvpTeam";
-import { getDashboardSnapshotFromDb } from "@/lib/dashboardEngine";
+import { getDashboardSnapshotFromDb, exposureBucketFromUtilization, type Bucket } from "@/lib/dashboardEngine";
 import { recomputeSnapshot } from "@/lib/evaluateEngine";
 import { getWorkItemsForTeam } from "@/lib/db/getWorkItemsForTeam";
 import { WorkItemsList } from "./workItemsList";
@@ -13,36 +13,21 @@ import { WorkItemsList } from "./workItemsList";
 import { DashboardViewSelector, type ViewKey } from "@/components/dashboard/DashboardViewSelector";
 import { CardTitleWithTooltip } from "@/components/dashboard/CardTitleWithTooltip";
 import { PeakLoadLabel } from "@/components/dashboard/PeakLoadLabel";
+import { WeekUtilizationBar } from "@/components/dashboard/WeekUtilizationBar";
+import {
+  EXPOSURE_BADGE_STYLES,
+  exposureBucketLabel,
+  getViewLabel,
+} from "@/lib/dashboardConstants";
 import {
   todayYmdInTz,
   ymdToUtcDate,
   utcDateToYmd,
   startOfIsoWeekUtc,
-  addDaysUtc,
+  endOfIsoWeekUtc,
   formatDateDdMmYyyy,
+  weeksBetweenIsoWeeksInclusive,
 } from "@/lib/dates";
-
-type Bucket = "low" | "medium" | "high";
-
-const bucketLabel = (b: Bucket) => (b === "low" ? "LOW" : b === "medium" ? "MEDIUM" : "HIGH");
-
-const badgeStyles: Record<Bucket, string> = {
-  low: "bg-emerald-600/10 text-emerald-700 border-emerald-600/20",
-  medium: "bg-amber-600/10 text-amber-700 border-amber-600/20",
-  high: "bg-rose-600/10 text-rose-700 border-rose-600/20",
-};
-
-const barFill: Record<Bucket, string> = {
-  low: "bg-emerald-600",
-  medium: "bg-amber-600",
-  high: "bg-rose-600",
-};
-
-const bucketFromUtilization = (pct: number): Bucket => {
-  if (pct < 80) return "low";
-  if (pct <= 90) return "medium";
-  return "high";
-};
 
 function normalizeView(raw: unknown): ViewKey {
   // handle string | string[] | undefined
@@ -55,22 +40,6 @@ function normalizeView(raw: unknown): ViewKey {
 
   if (v === "month" || v === "4w" || v === "12w" || v === "quarter" || v === "6m") return v;
   return "4w";
-}
-
-function endOfIsoWeekUtc(d: Date): Date {
-  return addDaysUtc(startOfIsoWeekUtc(d), 6);
-}
-
-function diffDaysUtc(a: Date, b: Date): number {
-  const ms = a.getTime() - b.getTime();
-  return Math.floor(ms / (1000 * 60 * 60 * 24));
-}
-
-function weeksBetweenIsoWeeksInclusive(startYmd: string, endYmd: string): number {
-  const start = startOfIsoWeekUtc(ymdToUtcDate(startYmd));
-  const end = startOfIsoWeekUtc(ymdToUtcDate(endYmd));
-  const days = diffDaysUtc(end, start);
-  return Math.floor(days / 7) + 1;
 }
 
 function lastDayOfMonthYmd(todayYmd: string): string {
@@ -132,11 +101,27 @@ export default async function DashboardPage({
 
   const workItems = await getWorkItemsForTeam(MVP_TEAM_ID);
 
+  // ✅ Top 5 work items by estimated hours that fall within the current view
+  const viewStartYmd = horizonWeeksForView[0]?.weekStartYmd ?? "";
+  const viewEndYmd = horizonWeeksForView[horizonWeeksForView.length - 1]?.weekEndYmd ?? "";
+  const top5WorkItems = (() => {
+    if (!viewStartYmd || !viewEndYmd) return [];
+    return workItems
+      .filter((item) => {
+        const start = item.start_date ?? "";
+        if (!start) return false;
+        const end = item.deadline ?? "9999-12-31";
+        return start <= viewEndYmd && end >= viewStartYmd;
+      })
+      .sort((a, b) => b.estimated_hours - a.estimated_hours)
+      .slice(0, 5);
+  })();
+
   // ✅ At-risk weeks only from the current view
   const atRiskWeeks = horizonWeeksForView
     .map((week) => {
       const utilizationPct = Math.round((week.committedHours / week.capacityHours) * 100);
-      return { ...week, utilizationPct, bucket: bucketFromUtilization(utilizationPct) as Bucket };
+      return { ...week, utilizationPct, bucket: exposureBucketFromUtilization(utilizationPct) };
     })
     .filter((w) => w.utilizationPct > 90);
 
@@ -148,19 +133,10 @@ export default async function DashboardPage({
         )}`
       : "";
 
-  const viewLabel =
-    view === "month"
-      ? "Current month"
-      : view === "4w"
-      ? "Next 4 weeks"
-      : view === "12w"
-      ? "Next 12 weeks"
-      : view === "quarter"
-      ? "Current Quarter"
-      : "6 months";
+  const viewLabel = getViewLabel(view);
 
   return (
-    <main className="mx-auto max-w-6xl py-[52px] px-4 space-y-10">
+    <main className="mx-auto max-w-6xl w-full py-[52px] px-4 space-y-10">
       <header className="mb-[52px]">
         <div className="flex items-center justify-between mb-2">
           <h1 className="text-[2rem] font-semibold tracking-tight">Dashboard</h1>
@@ -191,10 +167,10 @@ export default async function DashboardPage({
               </div>
               <Badge
                 variant="outline"
-                className={badgeStyles[snapshot.exposureBucket as Bucket]}
-                aria-label={`Exposure: ${bucketLabel(snapshot.exposureBucket as Bucket)}`}
+                className={EXPOSURE_BADGE_STYLES[snapshot.exposureBucket]}
+                aria-label={`Exposure: ${exposureBucketLabel(snapshot.exposureBucket)}`}
               >
-                {bucketLabel(snapshot.exposureBucket as Bucket)} exposure
+                {exposureBucketLabel(snapshot.exposureBucket)} exposure
               </Badge>
             </div>
           </CardContent>
@@ -243,16 +219,6 @@ export default async function DashboardPage({
             <CardContent className="space-y-4">
               {horizonWeeksForView.map((week) => {
                 const utilization = Math.round((week.committedHours / week.capacityHours) * 100);
-                const bucket = bucketFromUtilization(utilization);
-                const buffer = snapshot.bufferHoursPerWeek;
-                const workHours = Math.max(0, week.committedHours - buffer);
-                const bufferPct = week.capacityHours > 0
-                  ? Math.min(100, (buffer / week.capacityHours) * 100)
-                  : 0;
-                const workPct = week.capacityHours > 0
-                  ? Math.min(100 - bufferPct, (workHours / week.capacityHours) * 100)
-                  : 0;
-
                 return (
                   <div key={week.weekStartYmd} className="space-y-2">
                     <div className="flex items-center justify-between gap-4 text-sm">
@@ -279,20 +245,11 @@ export default async function DashboardPage({
                         </div>
                       </div>
                     </div>
-
-                    <div className="h-2 w-full rounded-full bg-muted overflow-hidden flex">
-                      {buffer > 0 && bufferPct > 0 && (
-                        <div
-                          className="h-full bg-slate-400/40 shrink-0"
-                          style={{ width: `${bufferPct}%` }}
-                          title="Structural buffer"
-                        />
-                      )}
-                      <div
-                        className={`h-full shrink-0 ${barFill[bucket]}`}
-                        style={{ width: `${workPct}%` }}
-                      />
-                    </div>
+                    <WeekUtilizationBar
+                      capacityHours={week.capacityHours}
+                      committedHours={week.committedHours}
+                      bufferHoursPerWeek={snapshot.bufferHoursPerWeek}
+                    />
                   </div>
                 );
               })}
@@ -315,7 +272,7 @@ export default async function DashboardPage({
                 atRiskWeeks.map((week) => (
                   <div key={week.weekStartYmd} className="flex items-center justify-between text-xl">
                     <span className="text-xl font-medium">{week.weekLabel}</span>
-                    <Badge variant="outline" className={badgeStyles[week.bucket]}>
+                    <Badge variant="outline" className={EXPOSURE_BADGE_STYLES[week.bucket]}>
                       {week.utilizationPct}%
                     </Badge>
                   </div>
@@ -329,7 +286,7 @@ export default async function DashboardPage({
       </section>
 
       <section className="pt-4">
-        <WorkItemsList teamId={MVP_TEAM_ID} items={workItems} />
+        <WorkItemsList teamId={MVP_TEAM_ID} items={top5WorkItems} title="Committed work (top 5 by hours)" />
       </section>
     </main>
   );

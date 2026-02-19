@@ -3,6 +3,7 @@
 
 import { revalidatePath } from "next/cache";
 import { supabaseServer } from "@/lib/supabaseServer";
+import { isValidYmd } from "@/lib/dates";
 
 export async function deleteWorkItemAction(input: {
   teamId: string;
@@ -22,6 +23,7 @@ export async function deleteWorkItemAction(input: {
 
   revalidatePath("/dashboard");
   revalidatePath("/evaluate");
+  revalidatePath("/committed-work");
 
   return { ok: true as const };
 }
@@ -34,16 +36,6 @@ type UpdateWorkItemInput = {
   startDate: string;
   deadline: string | null;
 };
-
-function isValidYmd(s: string): boolean {
-  // Basic YYYY-MM-DD check plus calendar validation
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
-
-  const d = new Date(`${s}T00:00:00Z`);
-  if (Number.isNaN(d.getTime())) return false;
-
-  return d.toISOString().slice(0, 10) === s;
-}
 
 export async function updateWorkItemAction(
   input: UpdateWorkItemInput
@@ -98,6 +90,7 @@ export async function updateWorkItemAction(
 
   revalidatePath("/dashboard");
   revalidatePath("/evaluate");
+  revalidatePath("/committed-work");
 
   return { ok: true, item: { id: input.workItemId } };
 }
