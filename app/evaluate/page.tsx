@@ -94,7 +94,7 @@ export default async function EvaluatePage({
   return (
     <main className="mx-auto max-w-6xl py-[52px] px-4 space-y-10">
       <header className="mb-10">
-        <h1 className="text-3xl font-semibold tracking-tight">Evaluate</h1>
+        <h1 className="text-2xl font-semibold tracking-normal">Evaluate</h1>
       </header>
 
       {/* remount on view changes */}

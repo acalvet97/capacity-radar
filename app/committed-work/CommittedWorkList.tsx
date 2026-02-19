@@ -8,15 +8,27 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { WorkItemCard } from "@/components/work-items/WorkItemCard";
+import { WorkItemsTable } from "@/components/work-items/WorkItemsTable";
 import type { WorkItemRow } from "@/lib/db/getWorkItemsForTeam";
+import {
+  weeklyLoadInWindow,
+  pctWeeklyCapacity,
+  impactFromPct,
+  type ImpactLevel,
+} from "@/lib/workItemTableUtils";
 
 export type SortKey = "deadline" | "hours";
 
 const SORT_OPTIONS: { value: SortKey; label: string }[] = [
   { value: "deadline", label: "Closest deadline first" },
   { value: "hours", label: "Most hours first" },
+];
+
+const IMPACT_FILTER_OPTIONS: { value: "all" | ImpactLevel; label: string }[] = [
+  { value: "all", label: "All impact levels" },
+  { value: "low", label: "Low" },
+  { value: "medium", label: "Medium" },
+  { value: "high", label: "High" },
 ];
 
 function sortItems(items: WorkItemRow[], sortBy: SortKey): WorkItemRow[] {
@@ -36,29 +48,83 @@ function sortItems(items: WorkItemRow[], sortBy: SortKey): WorkItemRow[] {
   return copy;
 }
 
+function filterByImpact(
+  items: WorkItemRow[],
+  impactFilter: "all" | ImpactLevel,
+  viewStartYmd: string,
+  viewEndYmd: string,
+  weeklyCapacityHours: number
+): WorkItemRow[] {
+  if (impactFilter === "all") return items;
+  return items.filter((item) => {
+    const weeklyLoad = weeklyLoadInWindow(item, viewStartYmd, viewEndYmd);
+    const pct = pctWeeklyCapacity(weeklyLoad, weeklyCapacityHours);
+    const impact = impactFromPct(pct);
+    return impact === impactFilter;
+  });
+}
+
 export function CommittedWorkList(props: {
   teamId: string;
   items: WorkItemRow[];
+  viewStartYmd: string;
+  viewEndYmd: string;
+  weeklyCapacityHours: number;
 }) {
-  const { teamId, items } = props;
+  const {
+    teamId,
+    items,
+    viewStartYmd,
+    viewEndYmd,
+    weeklyCapacityHours,
+  } = props;
   const [sortBy, setSortBy] = React.useState<SortKey>("deadline");
+  const [impactFilter, setImpactFilter] = React.useState<"all" | ImpactLevel>("all");
+
+  const filtered = React.useMemo(
+    () =>
+      filterByImpact(
+        items,
+        impactFilter,
+        viewStartYmd,
+        viewEndYmd,
+        weeklyCapacityHours
+      ),
+    [items, impactFilter, viewStartYmd, viewEndYmd, weeklyCapacityHours]
+  );
 
   const sorted = React.useMemo(
-    () => sortItems(items, sortBy),
-    [items, sortBy]
+    () => sortItems(filtered, sortBy),
+    [filtered, sortBy]
   );
 
   return (
-    <Card className="rounded-md">
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
-        <h2 className="text-base font-semibold">Work items</h2>
+    <div className="space-y-4">
+      <div className="flex flex-row items-center justify-between gap-4">
         <Select
-          value={sortBy}
-          onValueChange={(v) => setSortBy(v as SortKey)}
+          value={impactFilter}
+          onValueChange={(v) => setImpactFilter(v as "all" | ImpactLevel)}
         >
-          <SelectTrigger className="w-[220px]" size="default">
-            <SelectValue placeholder="Sort by" />
+          <SelectTrigger className="w-[200px]" size="default">
+            <SelectValue placeholder="Filter by impact" />
           </SelectTrigger>
+          <SelectContent>
+            {IMPACT_FILTER_OPTIONS.map((opt) => (
+              <SelectItem key={opt.value} value={opt.value}>
+                {opt.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <div className="flex flex-row items-center gap-2">
+          <span className="text-sm text-muted-foreground">Sort by:</span>
+          <Select
+            value={sortBy}
+            onValueChange={(v) => setSortBy(v as SortKey)}
+          >
+            <SelectTrigger className="w-[220px]" size="default">
+              <SelectValue placeholder="Sort by" />
+            </SelectTrigger>
           <SelectContent>
             {SORT_OPTIONS.map((opt) => (
               <SelectItem key={opt.value} value={opt.value}>
@@ -66,19 +132,17 @@ export function CommittedWorkList(props: {
               </SelectItem>
             ))}
           </SelectContent>
-        </Select>
-      </CardHeader>
-      <CardContent className="space-y-2">
-        {sorted.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No committed work items.</p>
-        ) : (
-          <div className="space-y-2">
-            {sorted.map((it) => (
-              <WorkItemCard key={it.id} teamId={teamId} item={it} />
-            ))}
-          </div>
-        )}
-      </CardContent>
-    </Card>
+          </Select>
+        </div>
+      </div>
+      <WorkItemsTable
+        teamId={teamId}
+        items={sorted}
+        viewStartYmd={viewStartYmd}
+        viewEndYmd={viewEndYmd}
+        weeklyCapacityHours={weeklyCapacityHours}
+        title=""
+      />
+    </div>
   );
 }

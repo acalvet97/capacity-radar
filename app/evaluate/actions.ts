@@ -1,6 +1,7 @@
 // app/evaluate/actions.ts
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { MVP_TEAM_ID } from "@/lib/mvpTeam";
 import { isValidYmd } from "@/lib/dates";
@@ -56,5 +57,7 @@ export async function commitWork(input: CommitWorkInput) {
 
   if (error) throw new Error(error.message);
 
+  revalidatePath("/committed-work");
+  revalidatePath("/dashboard");
   return { id: data.id };
 }

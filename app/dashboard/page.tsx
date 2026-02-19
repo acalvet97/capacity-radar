@@ -101,21 +101,21 @@ export default async function DashboardPage({
 
   const workItems = await getWorkItemsForTeam(MVP_TEAM_ID);
 
-  // ✅ Top 5 work items by estimated hours that fall within the current view
+  // ✅ Work items in current view and top 5 by hours
   const viewStartYmd = horizonWeeksForView[0]?.weekStartYmd ?? "";
   const viewEndYmd = horizonWeeksForView[horizonWeeksForView.length - 1]?.weekEndYmd ?? "";
-  const top5WorkItems = (() => {
+  const workItemsInView = (() => {
     if (!viewStartYmd || !viewEndYmd) return [];
-    return workItems
-      .filter((item) => {
-        const start = item.start_date ?? "";
-        if (!start) return false;
-        const end = item.deadline ?? "9999-12-31";
-        return start <= viewEndYmd && end >= viewStartYmd;
-      })
-      .sort((a, b) => b.estimated_hours - a.estimated_hours)
-      .slice(0, 5);
+    return workItems.filter((item) => {
+      const start = item.start_date ?? "";
+      if (!start) return false;
+      const end = item.deadline ?? "9999-12-31";
+      return start <= viewEndYmd && end >= viewStartYmd;
+    });
   })();
+  const top5WorkItems = [...workItemsInView]
+    .sort((a, b) => b.estimated_hours - a.estimated_hours)
+    .slice(0, 5);
 
   // ✅ At-risk weeks only from the current view
   const atRiskWeeks = horizonWeeksForView
@@ -139,7 +139,7 @@ export default async function DashboardPage({
     <main className="mx-auto max-w-6xl w-full py-[52px] px-4 space-y-10">
       <header className="mb-[52px]">
         <div className="flex items-center justify-between mb-2">
-          <h1 className="text-[2rem] font-semibold tracking-tight">Dashboard</h1>
+          <h1 className="text-2xl font-semibold tracking-normal">Dashboard</h1>
           <div className="flex items-center gap-3">
             <span className="text-sm font-medium text-foreground">View:</span>
             <DashboardViewSelector view={view} />
@@ -286,7 +286,18 @@ export default async function DashboardPage({
       </section>
 
       <section className="pt-4">
-        <WorkItemsList teamId={MVP_TEAM_ID} items={top5WorkItems} title="Committed work (top 5 by hours)" />
+        <WorkItemsList
+          teamId={MVP_TEAM_ID}
+          items={top5WorkItems}
+          title="Committed work (top 5 by hours)"
+          viewStartYmd={viewStartYmd}
+          viewEndYmd={viewEndYmd}
+          weeklyCapacityHours={
+            horizonWeeksForView.length > 0
+              ? snapshot.totalCapacityHours / horizonWeeksForView.length
+              : 0
+          }
+        />
       </section>
     </main>
   );
