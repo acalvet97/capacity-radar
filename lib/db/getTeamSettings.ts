@@ -15,5 +15,5 @@ export async function getTeamBufferAndCapacity(teamId: string) {
   const cycleCapacity = await loadTeamCapacityHoursPerCycle(teamId);
   const weeklyCapacity = cycleCapacity / 4;
 
-  return { bufferHoursPerWeek, weeklyCapacity: Math.round(weeklyCapacity) };
+  return { bufferHoursPerWeek, weeklyCapacity };
 }

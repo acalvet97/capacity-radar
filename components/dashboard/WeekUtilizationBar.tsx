@@ -34,7 +34,7 @@ export function WeekUtilizationBar({
         <div
           className="h-full bg-slate-400/40 shrink-0"
           style={{ width: `${bufferPct}%` }}
-          title="Structural buffer"
+          title="Reserved capacity"
         />
       )}
       <div

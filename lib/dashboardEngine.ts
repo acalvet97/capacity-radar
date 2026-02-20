@@ -158,12 +158,14 @@ export async function getDashboardSnapshotFromDb(
     locale,
   });
 
-  // 2b) Add structural buffer to every week (pre-committed load)
-  for (let i = 0; i < horizonWeeks.length; i++) {
-    horizonWeeks[i] = {
-      ...horizonWeeks[i],
-      committedHours: round1(horizonWeeks[i].committedHours + bufferHoursPerWeek),
-    };
+  // 2b) Add structural buffer to every week (pre-committed load) - only if buffer is enabled
+  if (bufferHoursPerWeek > 0) {
+    for (let i = 0; i < horizonWeeks.length; i++) {
+      horizonWeeks[i] = {
+        ...horizonWeeks[i],
+        committedHours: round1(horizonWeeks[i].committedHours + bufferHoursPerWeek),
+      };
+    }
   }
 
   // 3) Load work items

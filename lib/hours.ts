@@ -3,6 +3,9 @@
  */
 const MIN_HOURS = 0.5;
 
+/** All hours inputs use 0.5 increments (step=0.5). */
+export const HOURS_STEP = 0.5;
+
 /**
  * Round a number to the nearest 0.5.
  * Uses integer math to avoid floating-point issues.
@@ -25,6 +28,16 @@ export function sanitizeHoursInput(raw: string | number): number {
   if (!Number.isFinite(num)) return MIN_HOURS;
   const rounded = roundToHalfHour(num);
   return Math.max(MIN_HOURS, rounded);
+}
+
+/**
+ * Like sanitizeHoursInput but allows 0 (e.g. for team capacity or reserved capacity when disabled).
+ * Rounds to nearest 0.5; returns 0 for NaN/empty/invalid or negative.
+ */
+export function sanitizeHoursInputAllowZero(raw: string | number): number {
+  const num = typeof raw === "string" ? Number(raw.trim()) : raw;
+  if (!Number.isFinite(num) || num < 0) return 0;
+  return roundToHalfHour(num);
 }
 
 /**

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { AppSidebar } from "@/components/layout/navbar";
+import { TopBar } from "@/components/layout/TopBar";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -24,7 +25,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <TooltipProvider>
           <SidebarProvider>
             <AppSidebar />
-            <SidebarInset className="ml-[16rem]">{children}</SidebarInset>
+            <SidebarInset className="ml-[16rem] flex flex-col">
+              <TopBar />
+              <main className="flex-1">{children}</main>
+            </SidebarInset>
           </SidebarProvider>
           <Toaster />
         </TooltipProvider>

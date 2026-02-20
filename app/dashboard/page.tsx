@@ -181,7 +181,7 @@ export default async function DashboardPage({
           <CardHeader className="pb-1">
             <CardTitleWithTooltip
               title="Total committed"
-              tooltip={snapshot.bufferHoursPerWeek > 0 ? `Includes ${snapshot.bufferHoursPerWeek}h/week buffer.` : undefined}
+              tooltip={snapshot.bufferHoursPerWeek > 0 ? `Includes ${snapshot.bufferHoursPerWeek}h/week reserved capacity.` : undefined}
               className="text-sm font-medium text-muted-foreground"
             />
           </CardHeader>
