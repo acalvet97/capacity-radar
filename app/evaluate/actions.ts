@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { MVP_TEAM_ID } from "@/lib/mvpTeam";
 import { isValidYmd } from "@/lib/dates";
+import { sanitizeHoursInput } from "@/lib/hours";
 
 export type CommitWorkInput = {
   name: string;
@@ -19,8 +20,8 @@ export async function commitWork(input: CommitWorkInput) {
   const name = input.name?.trim() ?? "";
   if (!name) throw new Error("Work name is required.");
 
-  const totalHours = Number(input.totalHours);
-  if (!Number.isFinite(totalHours) || totalHours <= 0) {
+  const totalHours = sanitizeHoursInput(input.totalHours);
+  if (totalHours <= 0) {
     throw new Error("Total hours must be > 0.");
   }
 

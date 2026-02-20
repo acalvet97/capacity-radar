@@ -12,6 +12,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import type { WorkItemRow } from "@/lib/db/getWorkItemsForTeam";
 import { formatDateDdMmYyyy } from "@/lib/dates";
 import {
@@ -21,6 +22,7 @@ import {
   IMPACT_LABELS,
   IMPACT_BADGE_STYLES,
 } from "@/lib/workItemTableUtils";
+import { sanitizeHoursInput, formatHoursForDisplay } from "@/lib/hours";
 
 function formatDate(dateStr: string | null) {
   if (!dateStr) return "—";
@@ -87,11 +89,12 @@ export function WorkItemsTable({
 
   function onSubmitEdit(workItemId: string) {
     setErrorMessage(null);
-    const parsedHours = Number(draftHours);
-    if (!Number.isFinite(parsedHours) || parsedHours <= 0) {
+    const parsedHours = sanitizeHoursInput(draftHours);
+    if (parsedHours <= 0) {
       setErrorMessage("Estimated hours must be greater than 0.");
       return;
     }
+    setDraftHours(String(parsedHours));
     startTransition(async () => {
       try {
         const res = await updateWorkItemAction({
@@ -158,13 +161,13 @@ export function WorkItemsTable({
                   <TableRow>
                     <TableCell className="font-medium">{displayName}</TableCell>
                     <TableCell className="text-right">
-                      {Math.round(item.estimated_hours)}h
+                      {formatHoursForDisplay(item.estimated_hours)}h
                     </TableCell>
                     <TableCell>{formatDate(item.start_date)}</TableCell>
                     <TableCell>{formatDate(item.deadline)}</TableCell>
                     <TableCell className="text-right">
                       {weeklyCapacityHours > 0
-                        ? `${Math.round(weeklyLoad * 10) / 10}h`
+                        ? `${formatHoursForDisplay(weeklyLoad)}h`
                         : "—"}
                     </TableCell>
                     <TableCell className="text-right">
@@ -214,8 +217,7 @@ export function WorkItemsTable({
                           <div className="grid gap-3 sm:grid-cols-4">
                             <label className="flex flex-col gap-1 text-xs">
                               <span className="text-muted-foreground">Name</span>
-                              <input
-                                className="rounded-md border px-2 py-1.5 text-sm"
+                              <Input
                                 value={draftName}
                                 onChange={(e) =>
                                   setDraftName(e.target.value)
@@ -226,21 +228,28 @@ export function WorkItemsTable({
                               <span className="text-muted-foreground">
                                 Estimated hours
                               </span>
-                              <input
-                                className="rounded-md border px-2 py-1.5 text-sm"
-                                inputMode="numeric"
+                              <Input
+                                type="number"
+                                min={0.5}
+                                step={0.5}
+                                inputMode="decimal"
                                 value={draftHours}
                                 onChange={(e) =>
                                   setDraftHours(e.target.value)
                                 }
+                                onBlur={() => {
+                                  const sanitized = sanitizeHoursInput(draftHours);
+                                  if (Number(draftHours) !== sanitized) {
+                                    setDraftHours(String(sanitized));
+                                  }
+                                }}
                               />
                             </label>
                             <label className="flex flex-col gap-1 text-xs">
                               <span className="text-muted-foreground">
                                 Start date
                               </span>
-                              <input
-                                className="rounded-md border px-2 py-1.5 text-sm"
+                              <Input
                                 type="date"
                                 value={draftStart}
                                 onChange={(e) =>
@@ -252,8 +261,7 @@ export function WorkItemsTable({
                               <span className="text-muted-foreground">
                                 Deadline (optional)
                               </span>
-                              <input
-                                className="rounded-md border px-2 py-1.5 text-sm"
+                              <Input
                                 type="date"
                                 value={draftDeadline}
                                 onChange={(e) =>

@@ -30,6 +30,7 @@ import {
 import { formatDateDdMmYyyy, isValidYmd, weeksBetweenIsoWeeksInclusive } from "@/lib/dates";
 import { evaluateNewWork, type NewWorkInput } from "@/lib/evaluateEngine";
 import { commitWork } from "@/app/evaluate/actions";
+import { sanitizeHoursInput } from "@/lib/hours";
 
 function viewForNeededWeeks(neededWeeks: number): ViewKey {
   if (neededWeeks <= 4) return "4w";
@@ -54,8 +55,7 @@ export function EvaluateClient({ before, view }: { before: DashboardSnapshot; vi
   const [deadlineYmd, setDeadlineYmd] = useState<string>("");
   const [allocationMode, setAllocationMode] = useState<"even" | "fill_capacity">("fill_capacity");
 
-  const parsedHours = Number(hours);
-  const safeHours = Number.isFinite(parsedHours) ? Math.max(0, parsedHours) : 0;
+  const safeHours = sanitizeHoursInput(hours);
 
   function setViewInUrl(nextView: ViewKey) {
     const params = new URLSearchParams(searchParams?.toString());
@@ -151,9 +151,18 @@ export function EvaluateClient({ before, view }: { before: DashboardSnapshot; vi
                   <Label htmlFor="hours">Total hours</Label>
                   <Input
                     id="hours"
-                    inputMode="numeric"
+                    type="number"
+                    min={0.5}
+                    step={0.5}
+                    inputMode="decimal"
                     value={hours}
                     onChange={(e) => setHours(e.target.value)}
+                    onBlur={() => {
+                      const sanitized = sanitizeHoursInput(hours);
+                      if (Number(hours) !== sanitized) {
+                        setHours(String(sanitized));
+                      }
+                    }}
                   />
                 </div>
 

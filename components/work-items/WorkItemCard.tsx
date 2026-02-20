@@ -3,8 +3,10 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { deleteWorkItemAction, updateWorkItemAction } from "@/app/actions/workItems";
+import { Input } from "@/components/ui/input";
 import type { WorkItemRow } from "@/lib/db/getWorkItemsForTeam";
 import { formatDateDdMmYyyy } from "@/lib/dates";
+import { sanitizeHoursInput, formatHoursForDisplay } from "@/lib/hours";
 
 function formatDate(dateStr: string | null) {
   if (!dateStr) return "—";
@@ -60,12 +62,13 @@ export function WorkItemCard(props: { teamId: string; item: WorkItemRow }) {
   function onSubmitEdit() {
     setErrorMessage(null);
 
-    const parsedHours = Number(draftHours);
-    if (!Number.isFinite(parsedHours) || parsedHours <= 0) {
+    const parsedHours = sanitizeHoursInput(draftHours);
+    if (parsedHours <= 0) {
       setErrorMessage("Estimated hours must be greater than 0.");
       return;
     }
 
+    setDraftHours(String(parsedHours));
     startTransition(async () => {
       try {
         const res = await updateWorkItemAction({
@@ -98,7 +101,7 @@ export function WorkItemCard(props: { teamId: string; item: WorkItemRow }) {
             <div className="text-sm font-medium truncate">{displayName}</div>
             <div className="text-xs text-muted-foreground">
               <span className="font-medium text-foreground">
-                {Math.round(item.estimated_hours)}h
+                {formatHoursForDisplay(item.estimated_hours)}h
               </span>
               {item.start_date && item.deadline ? (
                 <>
@@ -144,8 +147,7 @@ export function WorkItemCard(props: { teamId: string; item: WorkItemRow }) {
           <div className="grid gap-2 md:grid-cols-4">
             <label className="flex flex-col gap-1 text-xs">
               <span className="text-muted-foreground">Name</span>
-              <input
-                className="rounded-md border px-2 py-1 text-sm"
+              <Input
                 value={draftName}
                 onChange={(e) => setDraftName(e.target.value)}
               />
@@ -153,18 +155,25 @@ export function WorkItemCard(props: { teamId: string; item: WorkItemRow }) {
 
             <label className="flex flex-col gap-1 text-xs">
               <span className="text-muted-foreground">Estimated hours</span>
-              <input
-                className="rounded-md border px-2 py-1 text-sm"
-                inputMode="numeric"
+              <Input
+                type="number"
+                min={0.5}
+                step={0.5}
+                inputMode="decimal"
                 value={draftHours}
                 onChange={(e) => setDraftHours(e.target.value)}
+                onBlur={() => {
+                  const sanitized = sanitizeHoursInput(draftHours);
+                  if (Number(draftHours) !== sanitized) {
+                    setDraftHours(String(sanitized));
+                  }
+                }}
               />
             </label>
 
             <label className="flex flex-col gap-1 text-xs">
               <span className="text-muted-foreground">Start date</span>
-              <input
-                className="rounded-md border px-2 py-1 text-sm"
+              <Input
                 type="date"
                 value={draftStart}
                 onChange={(e) => setDraftStart(e.target.value)}
@@ -173,8 +182,7 @@ export function WorkItemCard(props: { teamId: string; item: WorkItemRow }) {
 
             <label className="flex flex-col gap-1 text-xs">
               <span className="text-muted-foreground">Deadline (optional)</span>
-              <input
-                className="rounded-md border px-2 py-1 text-sm"
+              <Input
                 type="date"
                 value={draftDeadline}
                 onChange={(e) => setDraftDeadline(e.target.value)}

@@ -14,6 +14,7 @@ import {
   SheetFooter,
 } from "@/components/ui/sheet";
 import { commitWork } from "@/app/evaluate/actions";
+import { sanitizeHoursInput } from "@/lib/hours";
 
 export function CommittedWorkHeader() {
   const router = useRouter();
@@ -37,12 +38,12 @@ export function CommittedWorkHeader() {
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    const hours = Number(estimatedHours);
+    const hours = sanitizeHoursInput(estimatedHours);
     if (!name.trim()) {
       setError("Name is required.");
       return;
     }
-    if (!Number.isFinite(hours) || hours <= 0) {
+    if (hours <= 0) {
       setError("Estimated hours must be greater than 0.");
       return;
     }
@@ -140,16 +141,23 @@ export function CommittedWorkHeader() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="add-hours">Estimated hours</Label>
-<Input
-                id="add-hours"
-                type="number"
-                min={0.5}
-                step={0.5}
-                value={estimatedHours}
-                onChange={(e) => setEstimatedHours(e.target.value)}
-                placeholder="e.g. 40"
-                className="scroll-mt-4 scroll-mb-4"
-              />
+                <Input
+                  id="add-hours"
+                  type="number"
+                  min={0.5}
+                  step={0.5}
+                  inputMode="decimal"
+                  value={estimatedHours}
+                  onChange={(e) => setEstimatedHours(e.target.value)}
+                  onBlur={() => {
+                    const sanitized = sanitizeHoursInput(estimatedHours);
+                    if (Number(estimatedHours) !== sanitized) {
+                      setEstimatedHours(String(sanitized));
+                    }
+                  }}
+                  placeholder="e.g. 40"
+                  className="scroll-mt-4 scroll-mb-4"
+                />
               </div>
               <div className="min-h-[1.25rem]" role="alert" aria-live="polite">
                 {error ? (

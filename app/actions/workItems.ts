@@ -4,6 +4,7 @@
 import { revalidatePath } from "next/cache";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { isValidYmd } from "@/lib/dates";
+import { sanitizeHoursInput } from "@/lib/hours";
 
 export async function deleteWorkItemAction(input: {
   teamId: string;
@@ -50,8 +51,8 @@ export async function updateWorkItemAction(
     return { ok: false, message: "Name is required." };
   }
 
-  const hours = Number(input.estimatedHours);
-  if (!Number.isFinite(hours) || hours <= 0) {
+  const hours = sanitizeHoursInput(input.estimatedHours);
+  if (hours <= 0) {
     return { ok: false, message: "Estimated hours must be greater than 0." };
   }
 
