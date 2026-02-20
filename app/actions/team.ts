@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { loadTeamCapacityHoursPerCycle } from "@/lib/loadTeamCapacity";
+import { cycleToWeekly } from "@/lib/capacityUnits";
 import { sanitizeHoursInput, sanitizeHoursInputAllowZero } from "@/lib/hours";
 
 export type UpdateBufferResult = { ok: true } | { ok: false; message: string };
@@ -110,7 +111,7 @@ export async function updateReservedCapacityAction(
   enabled: boolean,
   hoursPerWeek: number
 ): Promise<UpdateReservedCapacityResult> {
-  const weeklyCapacity = (await loadTeamCapacityHoursPerCycle(teamId)) / 4;
+  const weeklyCapacity = cycleToWeekly(await loadTeamCapacityHoursPerCycle(teamId));
   const maxHours = Math.round(weeklyCapacity * 2) / 2; // round to 0.5
 
   if (!enabled) {
@@ -140,7 +141,7 @@ export async function updateReservedCapacityAction(
   const supabase = supabaseAdmin();
   const { error } = await supabase
     .from("teams")
-    .update({ buffer_hours_per_week: sanitized })
+    .update({ buffer_hours_per_week: Math.round(sanitized) })
     .eq("id", teamId);
 
   if (error) return { ok: false, message: error.message };
@@ -163,8 +164,7 @@ export async function updateBufferAction(
     return { ok: false, message: "Reserved capacity must be a non-negative number." };
   }
 
-  const cycleCapacity = await loadTeamCapacityHoursPerCycle(teamId);
-  const weeklyCapacity = cycleCapacity / 4;
+  const weeklyCapacity = cycleToWeekly(await loadTeamCapacityHoursPerCycle(teamId));
   if (sanitized > weeklyCapacity) {
     return {
       ok: false,
@@ -175,7 +175,7 @@ export async function updateBufferAction(
   const supabase = supabaseAdmin();
   const { error } = await supabase
     .from("teams")
-    .update({ buffer_hours_per_week: sanitized })
+    .update({ buffer_hours_per_week: Math.round(sanitized) })
     .eq("id", teamId);
 
   if (error) {

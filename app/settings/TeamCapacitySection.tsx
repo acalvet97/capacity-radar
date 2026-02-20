@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { HOURS_STEP, sanitizeHoursInputAllowZero } from "@/lib/hours";
+import { cycleToWeekly, weeklyToCycle } from "@/lib/capacityUnits";
 import { MVP_TEAM_ID } from "@/lib/mvpTeam";
 import {
   updateTeamMembersHoursAction,
@@ -28,7 +29,7 @@ function toMemberRows(rows: TeamMemberRow[]): MemberRow[] {
   return rows.map((m) => ({
     id: m.id,
     name: m.name,
-    hoursInput: String(m.hours_per_cycle),
+    hoursInput: String(cycleToWeekly(m.hours_per_cycle)),
     isNew: false,
   }));
 }
@@ -45,19 +46,16 @@ export function TeamCapacitySection({ initialMembers }: { initialMembers: TeamMe
 
   const hasChanges = React.useMemo(() => {
     const existing = members.filter((m) => !m.isNew);
-    const updates: TeamMemberUpdate[] = existing.map((m) => ({
-      id: m.id,
-      name: m.name,
-      hours_per_cycle: sanitizeHoursInputAllowZero(m.hoursInput),
-    }));
     const sameAsInitial =
       existing.length === initialMembers.length &&
-      updates.every((u) => {
-        const orig = initialMembers.find((x) => x.id === u.id);
+      existing.every((m) => {
+        const orig = initialMembers.find((x) => x.id === m.id);
+        if (!orig) return false;
+        const currentWeekly = sanitizeHoursInputAllowZero(m.hoursInput);
+        const origWeekly = cycleToWeekly(orig.hours_per_cycle);
         return (
-          orig &&
-          (u.name ?? null) === (orig.name ?? null) &&
-          u.hours_per_cycle === orig.hours_per_cycle
+          (m.name ?? null) === (orig.name ?? null) &&
+          currentWeekly === origWeekly
         );
       });
     const hasNew = members.some((m) => m.isNew);
@@ -131,7 +129,7 @@ export function TeamCapacitySection({ initialMembers }: { initialMembers: TeamMe
       const updates: TeamMemberUpdate[] = existing.map((m) => ({
         id: m.id,
         name: m.name ?? null,
-        hours_per_cycle: sanitizeHoursInputAllowZero(m.hoursInput),
+        hours_per_cycle: weeklyToCycle(sanitizeHoursInputAllowZero(m.hoursInput)),
       }));
       if (updates.length) {
         const res = await updateTeamMembersHoursAction(MVP_TEAM_ID, updates);
@@ -142,8 +140,12 @@ export function TeamCapacitySection({ initialMembers }: { initialMembers: TeamMe
       }
       for (const row of newRows) {
         const name = (row.name ?? "").trim() || "New member";
-        const hours = sanitizeHoursInputAllowZero(row.hoursInput);
-        const res = await createTeamMemberAction(MVP_TEAM_ID, name, hours);
+        const hoursPerWeek = sanitizeHoursInputAllowZero(row.hoursInput);
+        const res = await createTeamMemberAction(
+          MVP_TEAM_ID,
+          name,
+          weeklyToCycle(hoursPerWeek)
+        );
         if (!res.ok) {
           toast.error(res.message);
           return;
@@ -159,8 +161,8 @@ export function TeamCapacitySection({ initialMembers }: { initialMembers: TeamMe
       <CardHeader>
         <h2 className="text-base font-semibold">Team Capacity</h2>
         <p className="text-sm text-muted-foreground mt-1">
-          Define how much work this team can deliver per 4-week cycle. Weekly capacity is this total
-          ÷ 4.
+          Define how much work this team can deliver per week. Stored as a 4-week cycle in the
+          database.
         </p>
       </CardHeader>
       <CardContent className="px-6">
@@ -170,7 +172,7 @@ export function TeamCapacitySection({ initialMembers }: { initialMembers: TeamMe
               <thead>
                 <tr className="border-b bg-muted/50">
                   <th className="text-left font-medium px-3 py-2">Name</th>
-                  <th className="text-left font-medium px-3 py-2 w-[140px]">Hours per 4-week cycle</th>
+                  <th className="text-left font-medium px-3 py-2 w-[140px]">Hours per week</th>
                   <th className="w-10" />
                 </tr>
               </thead>
@@ -231,7 +233,7 @@ export function TeamCapacitySection({ initialMembers }: { initialMembers: TeamMe
               Add member
             </Button>
             <p className="text-sm text-muted-foreground">
-              Total capacity (4-week cycle):{" "}
+              Total weekly capacity:{" "}
               <span className="font-medium text-foreground">{totalCapacity}h</span>
             </p>
           </div>

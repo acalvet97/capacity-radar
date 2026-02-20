@@ -9,6 +9,11 @@ import {
   diffDaysUtc,
 } from "@/lib/dates";
 import { clamp, round1 } from "@/lib/utils";
+import {
+  getTotalWeeklyCapacityFromMembers,
+  getWeeklyAvailableCapacity,
+  getTotalCapacityForHorizonWeeks,
+} from "@/lib/teamCapacity";
 
 export type Bucket = "low" | "medium" | "high";
 
@@ -99,12 +104,8 @@ function buildHorizon(params: {
 
 /**
  * DB-backed snapshot (deterministic):
- * - Rolling ISO-week horizon starting from a chosen start date (defaults to today in Europe/Madrid)
- * - View length is configurable (defaults to 4 weeks; presets can be 12 weeks, quarter=13, etc.)
- * - capacity = sum(team_members.hours_per_cycle) / 4 per week (MVP)
- * - workload distribution:
- *   start_date..deadline inclusive (uniform per week buckets)
- *   if deadline is null => start_date..end of horizon
+ * - Rolling ISO-week horizon; capacity is weekly (canonical) × horizon weeks.
+ * - Reserved capacity reduces weekly available capacity (structural load), not committed.
  */
 export async function getDashboardSnapshotFromDb(
   teamId: string,
@@ -125,7 +126,7 @@ export async function getDashboardSnapshotFromDb(
   const tz = options.tz ?? "Europe/Madrid";
   const locale = options.locale ?? "en-GB";
 
-  const maxWeeks = options.maxWeeks ?? 52; // MVP safety
+  const maxWeeks = options.maxWeeks ?? 52;
   const requestedWeeks = Number(options.weeks ?? 4);
   const weeks = clamp(
     Number.isFinite(requestedWeeks) ? requestedWeeks : 4,
@@ -135,7 +136,7 @@ export async function getDashboardSnapshotFromDb(
 
   const startYmd = (options.startYmd ?? todayYmdInTz(tz)).trim();
 
-  // 1) Load team capacity (hours per cycle)
+  // 1) Weekly capacity from members (canonical unit)
   const { data: members, error: memErr } = await supabase
     .from("team_members")
     .select("hours_per_cycle")
@@ -143,30 +144,21 @@ export async function getDashboardSnapshotFromDb(
 
   if (memErr) throw new Error(memErr.message);
 
-  const cycleCapacityHours = Math.round(
-    (members ?? []).reduce((sum, m) => sum + Number(m.hours_per_cycle ?? 0), 0)
+  const totalWeekly = getTotalWeeklyCapacityFromMembers(members ?? []);
+  const reservedEnabled = bufferHoursPerWeek > 0;
+  const weeklyAvailable = getWeeklyAvailableCapacity(
+    totalWeekly,
+    bufferHoursPerWeek,
+    reservedEnabled
   );
 
-  // MVP capacity model: per-week capacity derived from "per 4-week cycle"
-  const weeklyCapacity = cycleCapacityHours / 4;
-
-  // 2) Build horizon (date-native)
+  // 2) Build horizon: each week has weeklyAvailable capacity
   const horizonWeeks = buildHorizon({
     startYmd,
     weeks,
-    weeklyCapacity,
+    weeklyCapacity: weeklyAvailable,
     locale,
   });
-
-  // 2b) Add structural buffer to every week (pre-committed load) - only if buffer is enabled
-  if (bufferHoursPerWeek > 0) {
-    for (let i = 0; i < horizonWeeks.length; i++) {
-      horizonWeeks[i] = {
-        ...horizonWeeks[i],
-        committedHours: round1(horizonWeeks[i].committedHours + bufferHoursPerWeek),
-      };
-    }
-  }
 
   // 3) Load work items
   const { data: workItems, error: wiErr } = await supabase
@@ -268,21 +260,26 @@ export async function getDashboardSnapshotFromDb(
     )
   );
 
-  // NOTE: overallUtilizationPct compares total committed in the VIEW vs total capacity per 4-week cycle.
-  // If the horizon isn't 4 weeks, this becomes misleading. Use viewCapacityHours instead.
+  const totalCapacityHours = Math.round(
+    getTotalCapacityForHorizonWeeks(weeklyAvailable, horizonWeeks.length)
+  );
   const viewCapacityHours = horizonWeeks.reduce((sum, w) => sum + w.capacityHours, 0);
 
   const overallUtilizationPct =
     viewCapacityHours > 0 ? Math.round((totalCommittedHours / viewCapacityHours) * 100) : 0;
 
   const weeksEquivalent =
-    weeklyCapacity > 0 ? round1(totalCommittedHours / weeklyCapacity) : 0;
+    weeklyAvailable > 0 ? round1(totalCommittedHours / weeklyAvailable) : 0;
+
+  const cycleCapacityHours = Math.round(
+    getTotalCapacityForHorizonWeeks(weeklyAvailable, 4)
+  );
 
   return {
     horizonWeeks,
     totalCommittedHours,
-    totalCapacityHours: Math.round(viewCapacityHours), // capacity for the current view
-    cycleCapacityHours, // total capacity per 4-week cycle
+    totalCapacityHours,
+    cycleCapacityHours,
     overallUtilizationPct,
     maxUtilizationPct,
     exposureBucket: exposureBucketFromUtilization(maxUtilizationPct),

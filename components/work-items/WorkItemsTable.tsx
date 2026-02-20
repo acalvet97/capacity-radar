@@ -12,6 +12,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Pencil, Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import type { WorkItemRow } from "@/lib/db/getWorkItemsForTeam";
 import { formatDateDdMmYyyy } from "@/lib/dates";
@@ -185,22 +187,28 @@ export function WorkItemsTable({
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1">
-                        <button
+                        <Button
                           type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground"
                           disabled={isPending}
                           onClick={() => beginEdit(item)}
-                          className={buttonClass}
+                          aria-label="Edit work item"
                         >
-                          Edit
-                        </button>
-                        <button
+                          <Pencil className="size-4" />
+                        </Button>
+                        <Button
                           type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
                           disabled={isPending}
                           onClick={() => onDelete(item)}
-                          className={buttonClass}
+                          aria-label="Delete work item"
                         >
-                          Delete
-                        </button>
+                          <Trash2 className="size-4" />
+                        </Button>
                       </div>
                     </TableCell>
                   </TableRow>
