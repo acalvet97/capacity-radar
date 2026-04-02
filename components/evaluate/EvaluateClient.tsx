@@ -28,6 +28,7 @@ import type {
   EvaluateChatApiResponse,
   ResultCardData,
   CommitCardData,
+  ChatIntent,
 } from "@/lib/evaluateChatTypes";
 
 function toApiMessages(messages: EvaluateChatMessage[]) {
@@ -338,11 +339,13 @@ export function EvaluateClient({
 
   const defaultStart = snapshot.horizonWeeks[0]?.weekStartYmd ?? todayYmd;
 
+  const initialGreeting =
+    "Hey — describe work you want to evaluate, or ask me anything about your team's capacity. For example: 'Do we have room for a 40h project in May?' or 'When is the team least loaded?'";
+
   const [messages, setMessages] = useState<EvaluateChatMessage[]>([
     {
       role: "assistant",
-      content:
-        "Describe the work you’re considering — for example hours, deadline, and when it should start. I’ll map it to the plan and show capacity impact.",
+      content: initialGreeting,
     },
   ]);
   const [chatInput, setChatInput] = useState("");
@@ -357,6 +360,7 @@ export function EvaluateClient({
   const [commitSuccess, setCommitSuccess] = useState(false);
   const hoursDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const threadRef = useRef<HTMLDivElement>(null);
+  const chatInputRef = useRef<HTMLTextAreaElement>(null);
   const formFieldsRef = useRef({
     name,
     hours,
@@ -560,6 +564,20 @@ export function EvaluateClient({
           throw new Error(data.error ?? "Chat request failed");
         }
 
+        const intent: ChatIntent = data.intent ?? "evaluate";
+
+        if (intent === "query" || intent === "ambiguous") {
+          setMessages([
+            ...nextThread,
+            {
+              role: "assistant",
+              content: data.message,
+              intent,
+            },
+          ]);
+          return;
+        }
+
         let merged = {
           name,
           hours,
@@ -606,6 +624,7 @@ export function EvaluateClient({
           {
             role: "assistant",
             content: data.message,
+            intent: "evaluate",
             resultCard,
             scenarioCards,
             commitCard,
@@ -617,19 +636,31 @@ export function EvaluateClient({
         toast.error(msg);
       } finally {
         setIsChatLoading(false);
+        requestAnimationFrame(() => {
+          chatInputRef.current?.focus();
+        });
       }
     },
     [allocationMode, deadlineYmd, hours, name, snapshot, startYmd, todayYmd]
   );
 
-  function sendChat(e: React.FormEvent) {
+  function handleComposerKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key !== "Enter" || e.shiftKey) return;
     e.preventDefault();
-    const text = chatInput.trim();
+    if (isChatLoading || !chatInput.trim()) return;
+    e.currentTarget.form?.requestSubmit();
+  }
+
+  function sendChat(e?: React.FormEvent, overrideMessage?: string) {
+    e?.preventDefault();
+    const text = (overrideMessage ?? chatInput).trim();
     if (!text || isChatLoading) return;
     const userMsg: EvaluateChatMessage = { role: "user", content: text };
     const nextThread = [...messages, userMsg];
     setMessages(nextThread);
-    setChatInput("");
+    if (overrideMessage === undefined) {
+      setChatInput("");
+    }
     void runChatRequest(nextThread);
   }
 
@@ -637,8 +668,7 @@ export function EvaluateClient({
     setMessages([
       {
         role: "assistant",
-        content:
-          "Describe the work you’re considering — for example hours, deadline, and when it should start. I’ll map it to the plan and show capacity impact.",
+        content: initialGreeting,
       },
     ]);
     setName("New work item");
@@ -654,12 +684,7 @@ export function EvaluateClient({
   }
 
   function handlePostCommitTeamStatus() {
-    const userMsg: EvaluateChatMessage = { role: "user", content: "Show me the team status" };
-    setMessages((prev) => {
-      const nextThread = [...prev, userMsg];
-      Promise.resolve().then(() => runChatRequest(nextThread));
-      return nextThread;
-    });
+    sendChat(undefined, "Show me the team status");
   }
 
   function resetFormOnly() {
@@ -712,17 +737,14 @@ export function EvaluateClient({
   const lastCommitIdx = findLastCommitAssistantIndex(messages);
 
   return (
-    <div className="flex flex-col h-[calc(100vh-64px)] max-w-3xl mx-auto">
-      <header className="py-6 px-4 border-b shrink-0">
-        <h1 className="text-xl font-semibold">Klyra</h1>
-      </header>
-
-      <div ref={threadRef} className="flex-1 overflow-y-auto px-4 py-6 space-y-6 min-h-0">
+    <div className="flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden">
+      <div ref={threadRef} className="min-h-0 w-full flex-1 overflow-y-auto overflow-x-hidden">
+        <div className="mx-auto max-w-3xl space-y-6 px-4 py-6">
         {messages.map((msg, i) => {
           if (msg.role === "user") {
             return (
               <div key={i} className="flex justify-end">
-                <div className="bg-primary text-primary-foreground rounded-2xl rounded-tr-sm px-4 py-2.5 max-w-[75%] text-sm">
+                <div className="bg-primary text-primary-foreground rounded-2xl rounded-tr-sm px-4 py-2.5 max-w-[75%] text-sm whitespace-pre-wrap">
                   {msg.content}
                 </div>
               </div>
@@ -780,20 +802,26 @@ export function EvaluateClient({
           );
         })}
         {isChatLoading && <TypingIndicator />}
+        </div>
       </div>
 
-      <div className="border-t px-4 py-4 shrink-0">
-        <form onSubmit={sendChat} className="flex gap-2">
-          <input
+      <div className="shrink-0 w-full py-4">
+        <div className="mx-auto max-w-3xl px-4">
+        <form onSubmit={sendChat} className="flex gap-2 items-end">
+          <textarea
+            ref={chatInputRef}
             value={chatInput}
             onChange={(e) => setChatInput(e.target.value)}
-            placeholder="Describe new work, or ask about the team..."
+            onKeyDown={handleComposerKeyDown}
+            placeholder="New project? Team question? Just ask..."
             disabled={isChatLoading}
-            className="flex-1 h-10 rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] disabled:opacity-50"
+            rows={1}
+            className="flex-1 min-h-12 max-h-40 resize-none rounded-xl border border-input bg-muted px-4 py-3 text-sm leading-normal shadow-sm outline-none focus-visible:border-ring focus-visible:bg-background focus-visible:ring-ring/50 focus-visible:ring-[3px] disabled:opacity-50 overflow-y-auto"
           />
           <Button
             type="submit"
             size="icon-lg"
+            className="h-12 w-12 shrink-0 rounded-xl"
             disabled={isChatLoading || !chatInput.trim()}
             aria-label="Send message"
           >
@@ -803,6 +831,7 @@ export function EvaluateClient({
         {chatError && (
           <p className="mt-2 text-xs text-rose-600">{chatError}</p>
         )}
+        </div>
       </div>
     </div>
   );

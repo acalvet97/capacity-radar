@@ -30,7 +30,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <AppSidebar />
             <SidebarInset className="ml-[16rem] flex flex-col">
               <TopBar />
-              <main className="flex-1">{children}</main>
+              <main className="min-h-0 flex-1">{children}</main>
             </SidebarInset>
           </SidebarProvider>
           <Toaster />

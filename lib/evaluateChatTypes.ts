@@ -1,5 +1,8 @@
 import type { AllocationMode, OverCapacityScenario } from "@/lib/evaluateEngine";
 
+/** Intent from the chat model (PRD 2b). */
+export type ChatIntent = "evaluate" | "query" | "ambiguous";
+
 /** Client ↔ /api/evaluate/chat message shape */
 export type ResultCardData = {
   peakUtilizationPct: number;
@@ -28,6 +31,7 @@ export type CommitCardData = {
 export type EvaluateChatMessage = {
   role: "user" | "assistant";
   content: string;
+  intent?: ChatIntent;
   resultCard?: ResultCardData;
   scenarioCards?: OverCapacityScenario[];
   commitCard?: CommitCardData;
@@ -54,6 +58,7 @@ export type EvaluateChatExtractionResponse = {
 
 /** API success body returned to the client. */
 export type EvaluateChatApiResponse = EvaluateChatExtractionResponse & {
+  intent: ChatIntent;
   /** Present when the server ran the engine (deterministic). */
   engineDigest?: {
     peakUtilizationPct: number;

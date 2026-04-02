@@ -11,7 +11,7 @@ export async function TopBar() {
 
   return (
     <header
-      className="flex shrink-0 items-center border-b border-border bg-background"
+      className="sticky top-0 z-40 flex shrink-0 items-center border-b border-border bg-background"
       style={{ height: TOP_BAR_HEIGHT }}
     >
       <span className="px-8 text-base font-medium text-foreground">

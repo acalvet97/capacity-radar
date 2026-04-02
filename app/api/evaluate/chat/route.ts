@@ -9,6 +9,9 @@ import type {
 } from "@/lib/evaluateChatTypes";
 import {
   buildNewWorkInputFromExtracted,
+  buildSnapshotDigest,
+  buildSystemPrompt,
+  parseModelJsonResponse,
   summarizeEngineForClient,
 } from "@/lib/evaluateChatServer";
 
@@ -16,46 +19,9 @@ export const maxDuration = 60;
 
 const MODEL = process.env.ANTHROPIC_MODEL ?? "claude-sonnet-4-20250514";
 
-const EXTRACTION_SYSTEM = `You are Klyra, an assistant for engineering managers planning team capacity.
-Your job in this step is to read the conversation and return a single JSON object ONLY (no markdown fences, no other text) with this exact shape:
-{
-  "message": string,
-  "extractedParams": { "name"?: string, "totalHours"?: number, "startYmd"?: string, "deadlineYmd"?: string, "allocationMode"?: "even" | "fill_capacity" } | null,
-  "readyToEvaluate": boolean
-}
-
-Rules:
-- "message" is a short, helpful reply. If information is missing for a sound evaluation, ask ONE focused follow-up question only.
-- Required before readyToEvaluate=true: estimated hours (totalHours > 0) and a valid startYmd (YYYY-MM-DD). If the user did not give a start date, use the provided todayYmd as startYmd.
-- Optional: name, deadlineYmd, allocationMode (default fill_capacity).
-- readyToEvaluate is true only when totalHours and startYmd are present and sufficient to run the capacity model.
-- Never invent capacity, utilization, or calendar facts. You only extract work parameters and converse.
-- If the user is refining previous numbers, merge context from the thread.
-
-The server's system prompt includes today's date as todayYmd for defaulting start date when missing.`;
-
 const NARRATION_SYSTEM = `You are Klyra. You will receive JSON with deterministic engine output from the team's capacity simulator.
 Write a concise, professional paragraph for the manager. You MUST use only the numbers and facts in the JSON. Do not invent or estimate anything.
 If scenarios are listed, briefly mention them as options without adding new numbers.`;
-
-function parseJsonResponse(text: string): {
-  message: string;
-  extractedParams: ExtractedWorkParams | null;
-  readyToEvaluate: boolean;
-} {
-  const trimmed = text.trim();
-  const unfenced = trimmed.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "");
-  const parsed = JSON.parse(unfenced) as {
-    message?: string;
-    extractedParams?: ExtractedWorkParams | null;
-    readyToEvaluate?: boolean;
-  };
-  return {
-    message: typeof parsed.message === "string" ? parsed.message : "",
-    extractedParams: parsed.extractedParams ?? null,
-    readyToEvaluate: Boolean(parsed.readyToEvaluate),
-  };
-}
 
 function toAnthropicMessages(messages: EvaluateChatMessage[]): {
   role: "user" | "assistant";
@@ -93,47 +59,65 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid request payload." }, { status: 400 });
   }
 
+  const snapshotDigestText = buildSnapshotDigest(snapshot, todayYmd);
+  const systemPrompt = buildSystemPrompt(snapshotDigestText, todayYmd);
+
   const anthropic = new Anthropic({ apiKey });
 
-  let extraction: ReturnType<typeof parseJsonResponse>;
+  let rawText: string;
   try {
     const res = await anthropic.messages.create({
       model: MODEL,
-      max_tokens: 1024,
-      system: `${EXTRACTION_SYSTEM}\n\ntodayYmd (default start date if user omits it): ${todayYmd}`,
+      max_tokens: 2048,
+      system: systemPrompt,
       messages: toAnthropicMessages(messages),
     });
-    const text = res.content
+    rawText = res.content
       .filter((b) => b.type === "text")
       .map((b) => ("text" in b ? b.text : ""))
       .join("\n");
-    extraction = parseJsonResponse(text);
   } catch (e) {
-    const msg = e instanceof Error ? e.message : "Extraction failed";
+    const msg = e instanceof Error ? e.message : "Request failed";
     return NextResponse.json({ error: msg }, { status: 502 });
   }
 
-  const merged: ExtractedWorkParams = {
-    allocationMode: "fill_capacity",
-    ...(extraction.extractedParams ?? {}),
-    startYmd: extraction.extractedParams?.startYmd ?? todayYmd,
-  };
+  const parsed = parseModelJsonResponse(rawText);
 
-  const input = buildNewWorkInputFromExtracted(merged, { todayYmd });
-  const canRun = extraction.readyToEvaluate && input !== null;
-
-  if (!canRun || !input) {
+  if (parsed.intent === "query" || parsed.intent === "ambiguous") {
     const out: EvaluateChatApiResponse = {
-      message: extraction.message,
-      extractedParams: extraction.extractedParams,
-      readyToEvaluate: extraction.readyToEvaluate,
+      message: parsed.message,
+      intent: parsed.intent,
+      extractedParams: null,
+      readyToEvaluate: false,
     };
     return NextResponse.json(out);
   }
 
-  const { evaluation, digest, scenarios } = summarizeEngineForClient(snapshot, input);
+  const merged: ExtractedWorkParams = {
+    allocationMode: "fill_capacity",
+    ...(parsed.extractedParams ?? {}),
+    startYmd: parsed.extractedParams?.startYmd ?? todayYmd,
+  };
 
-  let finalMessage = extraction.message;
+  const input = buildNewWorkInputFromExtracted(merged, { todayYmd });
+  const canRun = parsed.readyToEvaluate && input !== null;
+
+  if (!canRun || !input) {
+    const out: EvaluateChatApiResponse = {
+      message: parsed.message,
+      intent: "evaluate",
+      extractedParams: parsed.extractedParams,
+      readyToEvaluate: parsed.readyToEvaluate,
+    };
+    return NextResponse.json(out);
+  }
+
+  const { evaluation, digest: engineDigest, scenarios } = summarizeEngineForClient(
+    snapshot,
+    input
+  );
+
+  let finalMessage = parsed.message;
   try {
     const narr = await anthropic.messages.create({
       model: MODEL,
@@ -146,7 +130,7 @@ export async function POST(req: Request) {
             engine: {
               peakUtilizationPct: evaluation.after.maxUtilizationPct,
               overallUtilizationPct: evaluation.after.overallUtilizationPct,
-              fitsWithinCapacity: digest.fitsWithinCapacity,
+              fitsWithinCapacity: engineDigest.fitsWithinCapacity,
               weeksInSpan: evaluation.applied.weeksCount,
               totalCommittedAfter: evaluation.after.totalCommittedHours,
               totalCapacityInHorizon: evaluation.after.totalCapacityHours,
@@ -169,21 +153,22 @@ export async function POST(req: Request) {
       .trim();
     if (narrText) finalMessage = narrText;
   } catch {
-    finalMessage = digest.fitsWithinCapacity
-      ? `This plan peaks at ${digest.peakUtilizationPct}% utilization across the horizon.`
-      : `This plan peaks at ${digest.peakUtilizationPct}% utilization (over capacity). Consider adjusting deadline, scope, or allocation.`;
+    finalMessage = engineDigest.fitsWithinCapacity
+      ? `This plan peaks at ${engineDigest.peakUtilizationPct}% utilization across the horizon.`
+      : `This plan peaks at ${engineDigest.peakUtilizationPct}% utilization (over capacity). Consider adjusting deadline, scope, or allocation.`;
   }
 
   const out: EvaluateChatApiResponse = {
     message: finalMessage,
-    extractedParams: extraction.extractedParams,
+    intent: "evaluate",
+    extractedParams: parsed.extractedParams,
     readyToEvaluate: true,
     engineDigest: {
-      peakUtilizationPct: digest.peakUtilizationPct,
-      overallUtilizationPct: digest.overallUtilizationPct,
-      fitsWithinCapacity: digest.fitsWithinCapacity,
-      weeksInSpan: digest.weeksInSpan,
-      scenarioTitles: digest.scenarioTitles,
+      peakUtilizationPct: engineDigest.peakUtilizationPct,
+      overallUtilizationPct: engineDigest.overallUtilizationPct,
+      fitsWithinCapacity: engineDigest.fitsWithinCapacity,
+      weeksInSpan: engineDigest.weeksInSpan,
+      scenarioTitles: engineDigest.scenarioTitles,
     },
   };
 
