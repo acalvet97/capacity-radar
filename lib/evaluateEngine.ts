@@ -163,6 +163,131 @@ export function recomputeSnapshot(
   };
 }
 
+/** True if no week exceeds 100% utilization. */
+export function fitsWithinCapacity(result: EvaluateResult): boolean {
+  return result.after.maxUtilizationPct <= 100;
+}
+
+/**
+ * Earliest week-end date (YYYY-MM-DD) at or after the current deadline span
+ * where this work fits without exceeding 100% in any week. Null if no extension within horizon.
+ */
+export function findMinimumDeadlineYmdForFit(
+  snapshot: DashboardSnapshot,
+  input: NewWorkInput
+): string | null {
+  const startIdx = clamp(
+    weekIndexForYmd(snapshot.horizonWeeks, input.startYmd),
+    0,
+    snapshot.horizonWeeks.length - 1
+  );
+  const endIdxRaw =
+    typeof input.deadlineYmd === "string" && input.deadlineYmd.length
+      ? weekIndexForYmd(snapshot.horizonWeeks, input.deadlineYmd)
+      : snapshot.horizonWeeks.length - 1;
+  let endIdx = clamp(endIdxRaw, startIdx, snapshot.horizonWeeks.length - 1);
+
+  for (; endIdx < snapshot.horizonWeeks.length; endIdx++) {
+    const deadlineYmd = snapshot.horizonWeeks[endIdx].weekEndYmd;
+    const res = evaluateNewWork(snapshot, { ...input, deadlineYmd });
+    if (fitsWithinCapacity(res)) return deadlineYmd;
+  }
+  return null;
+}
+
+/**
+ * Maximum total hours that fit at the given start/deadline/allocation without exceeding 100%.
+ */
+export function findMaximumHoursForDeadline(
+  snapshot: DashboardSnapshot,
+  input: NewWorkInput,
+  opts?: { maxIterations?: number }
+): number {
+  const maxIter = opts?.maxIterations ?? 40;
+  let lo = 0;
+  let hi = Math.max(0, input.totalHours);
+  let best = 0;
+
+  for (let i = 0; i < maxIter && hi - lo > 0.25; i++) {
+    const mid = round1((lo + hi) / 2);
+    const res = evaluateNewWork(snapshot, { ...input, totalHours: mid });
+    if (fitsWithinCapacity(res)) {
+      best = mid;
+      lo = mid;
+    } else {
+      hi = mid;
+    }
+  }
+  return best;
+}
+
+export type OverCapacityScenario = {
+  id: "extend_deadline" | "reduce_scope" | "switch_allocation";
+  title: string;
+  description: string;
+  evaluation: EvaluateResult;
+  /** Values to apply to the form to preview this scenario. */
+  apply: {
+    deadlineYmd?: string;
+    totalHours?: number;
+    allocationMode?: AllocationMode;
+  };
+};
+
+/**
+ * Up to three deterministic alternatives when the baseline evaluation exceeds capacity.
+ */
+export function buildOverCapacityScenarios(
+  snapshot: DashboardSnapshot,
+  input: NewWorkInput
+): OverCapacityScenario[] {
+  const baseline = evaluateNewWork(snapshot, input);
+  if (fitsWithinCapacity(baseline)) return [];
+
+  const out: OverCapacityScenario[] = [];
+
+  const extended = findMinimumDeadlineYmdForFit(snapshot, input);
+  if (extended) {
+    const ev = evaluateNewWork(snapshot, { ...input, deadlineYmd: extended });
+    out.push({
+      id: "extend_deadline",
+      title: "Extend deadline",
+      description: `Push deadline to ${extended} so the work fits within weekly capacity.`,
+      evaluation: ev,
+      apply: { deadlineYmd: extended },
+    });
+  }
+
+  const maxHours = findMaximumHoursForDeadline(snapshot, input);
+  if (maxHours > 0 && maxHours < input.totalHours) {
+    const ev = evaluateNewWork(snapshot, { ...input, totalHours: maxHours });
+    out.push({
+      id: "reduce_scope",
+      title: "Reduce scope",
+      description: `Cap effort at about ${maxHours}h in the current window to stay within capacity.`,
+      evaluation: ev,
+      apply: { totalHours: maxHours },
+    });
+  }
+
+  if (out.length < 3) {
+    const altMode: AllocationMode = input.allocationMode === "even" ? "fill_capacity" : "even";
+    const alt = evaluateNewWork(snapshot, { ...input, allocationMode: altMode });
+    out.push({
+      id: "switch_allocation",
+      title: altMode === "even" ? "Use even spread" : "Use fill capacity",
+      description:
+        altMode === "even"
+          ? "Spread hours evenly across weeks instead of filling capacity first."
+          : "Fill remaining capacity each week before spreading the rest.",
+      evaluation: alt,
+      apply: { allocationMode: altMode },
+    });
+  }
+
+  return out.slice(0, 3);
+}
+
 /**
  * Evaluate new work impact on an already-built horizon (the "view").
  * If the input dates are outside the current horizon, this will clamp.
