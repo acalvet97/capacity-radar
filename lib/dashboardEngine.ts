@@ -1,6 +1,7 @@
 // lib/dashboardEngine.ts
 import { supabaseServer } from "@/lib/supabaseServer";
 import {
+  DEFAULT_TZ,
   todayYmdInTz,
   ymdToUtcDate,
   utcDateToYmd,
@@ -123,7 +124,7 @@ export async function getDashboardSnapshotFromDb(
 
   const bufferHoursPerWeek = Math.max(0, Number(teamRow?.buffer_hours_per_week ?? 0) || 0);
 
-  const tz = options.tz ?? "Europe/Madrid";
+  const tz = options.tz ?? DEFAULT_TZ;
   const locale = options.locale ?? "en-GB";
 
   const maxWeeks = options.maxWeeks ?? 52;

@@ -11,6 +11,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Pencil, Trash2 } from "lucide-react";
@@ -139,7 +144,16 @@ export function WorkItemsTable({
               <TableHead className="text-right">Total Hours</TableHead>
               <TableHead>Start</TableHead>
               <TableHead>Deadline</TableHead>
-              <TableHead className="text-right">Weekly Load</TableHead>
+              <TableHead className="text-right">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="cursor-help">Weekly Load</span>
+                  </TooltipTrigger>
+                  <TooltipContent side="top">
+                    Equivalent hours/week if spread evenly from start to deadline.
+                  </TooltipContent>
+                </Tooltip>
+              </TableHead>
               <TableHead className="text-right">% Weekly Capacity</TableHead>
               <TableHead>Impact</TableHead>
               <TableHead className="w-[120px] text-right">Actions</TableHead>

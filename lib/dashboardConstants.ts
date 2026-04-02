@@ -6,6 +6,9 @@ import type { Bucket } from "@/lib/dashboardEngine";
 /** View key to human-readable label. */
 export type ViewKey = "month" | "4w" | "12w" | "quarter" | "6m";
 
+/** Stable order for selects and URL parsing fallbacks. */
+export const VIEW_ORDER: ViewKey[] = ["month", "4w", "12w", "quarter", "6m"];
+
 export const VIEW_LABELS: Record<ViewKey, string> = {
   month: "Current month",
   "4w": "Next 4 weeks",

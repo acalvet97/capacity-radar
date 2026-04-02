@@ -3,14 +3,14 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { WorkItemsTable } from "@/components/work-items/WorkItemsTable";
 import { MVP_TEAM_ID } from "@/lib/mvpTeam";
-import { getDashboardSnapshotFromDb, exposureBucketFromUtilization, type Bucket } from "@/lib/dashboardEngine";
+import { getDashboardSnapshotFromDb, exposureBucketFromUtilization } from "@/lib/dashboardEngine";
 import { recomputeSnapshot } from "@/lib/evaluateEngine";
 import { getWorkItemsForTeam } from "@/lib/db/getWorkItemsForTeam";
-import { WorkItemsList } from "./workItemsList";
 
-import { DashboardViewSelector, type ViewKey } from "@/components/dashboard/DashboardViewSelector";
+import { DashboardViewSelector } from "@/components/dashboard/DashboardViewSelector";
 import { CardTitleWithTooltip } from "@/components/dashboard/CardTitleWithTooltip";
 import { PeakLoadLabel } from "@/components/dashboard/PeakLoadLabel";
 import { WeekUtilizationBar } from "@/components/dashboard/WeekUtilizationBar";
@@ -19,60 +19,8 @@ import {
   exposureBucketLabel,
   getViewLabel,
 } from "@/lib/dashboardConstants";
-import {
-  todayYmdInTz,
-  ymdToUtcDate,
-  utcDateToYmd,
-  startOfIsoWeekUtc,
-  endOfIsoWeekUtc,
-  formatDateDdMmYyyy,
-  weeksBetweenIsoWeeksInclusive,
-} from "@/lib/dates";
-
-function normalizeView(raw: unknown): ViewKey {
-  // handle string | string[] | undefined
-  const v =
-    typeof raw === "string"
-      ? raw
-      : Array.isArray(raw)
-      ? raw[0]
-      : "";
-
-  if (v === "month" || v === "4w" || v === "12w" || v === "quarter" || v === "6m") return v;
-  return "4w";
-}
-
-function lastDayOfMonthYmd(todayYmd: string): string {
-  const [yy, mm] = todayYmd.split("-").map(Number);
-  const last = new Date(Date.UTC(yy, mm, 0));
-  return utcDateToYmd(last);
-}
-
-function lastDayOfQuarterYmd(todayYmd: string): string {
-  const [yy, mm] = todayYmd.split("-").map(Number);
-  // mm is 1-based month number. Determine quarter end month (3,6,9,12)
-  const quarter = Math.floor((mm - 1) / 3);
-  const quarterEndMonth = (quarter + 1) * 3; // 3,6,9,12
-  const last = new Date(Date.UTC(yy, quarterEndMonth, 0));
-  return utcDateToYmd(last);
-}
-
-function weeksForView(view: ViewKey, todayYmd: string): number {
-  if (view === "4w") return 4;
-  if (view === "12w") return 12;
-  if (view === "quarter") {
-    // Current quarter -> include ISO weeks until the week containing quarter-end
-    const quarterEndYmd = lastDayOfQuarterYmd(todayYmd);
-    const endSundayYmd = utcDateToYmd(endOfIsoWeekUtc(ymdToUtcDate(quarterEndYmd)));
-    return weeksBetweenIsoWeeksInclusive(todayYmd, endSundayYmd);
-  }
-  if (view === "6m") return 26;
-
-  // month view -> include ISO weeks until the week containing month-end
-  const monthEndYmd = lastDayOfMonthYmd(todayYmd);
-  const endSundayYmd = utcDateToYmd(endOfIsoWeekUtc(ymdToUtcDate(monthEndYmd)));
-  return weeksBetweenIsoWeeksInclusive(todayYmd, endSundayYmd);
-}
+import { DEFAULT_TZ, todayYmdInTz, formatDateDdMmYyyy } from "@/lib/dates";
+import { normalizeViewSearchParam, weeksForHorizonView } from "@/lib/horizonView";
 
 export default async function DashboardPage({
   searchParams,
@@ -80,9 +28,9 @@ export default async function DashboardPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const params = await searchParams;
-  const view = normalizeView(params?.view);
-  const todayYmd = todayYmdInTz("Europe/Madrid");
-  const weeksInView = weeksForView(view, todayYmd);
+  const view = normalizeViewSearchParam(params?.view);
+  const todayYmd = todayYmdInTz(DEFAULT_TZ);
+  const weeksInView = weeksForHorizonView(view, todayYmd);
 
   // ✅ Always fetch full 26-week snapshot for underlying data
   const fullSnapshot = await getDashboardSnapshotFromDb(MVP_TEAM_ID, {
@@ -90,7 +38,7 @@ export default async function DashboardPage({
     weeks: 26,
     maxWeeks: 26,
     locale: "en-GB",
-    tz: "Europe/Madrid",
+    tz: DEFAULT_TZ,
   });
 
   // ✅ Filter weeks for display based on view
@@ -136,7 +84,7 @@ export default async function DashboardPage({
   const viewLabel = getViewLabel(view);
 
   return (
-    <main className="mx-auto max-w-6xl w-full py-[52px] px-4 space-y-10">
+    <div className="mx-auto max-w-6xl w-full py-[52px] px-4 space-y-10">
       <header className="mb-[52px]">
         <div className="flex items-center justify-between mb-2">
           <h1 className="text-2xl font-semibold tracking-normal">Dashboard</h1>
@@ -148,7 +96,9 @@ export default async function DashboardPage({
         {horizonHint && (
           <p className="text-sm">
             <span className="text-foreground">Showing data for:</span>{" "}
-            <span className="text-muted-foreground">{horizonHint.replace(" → ", " -> ")}</span>
+            <span className="text-muted-foreground">
+              {viewLabel}: {horizonHint.replace(" → ", " -> ")}
+            </span>
           </p>
         )}
       </header>
@@ -286,7 +236,7 @@ export default async function DashboardPage({
       </section>
 
       <section className="pt-4">
-        <WorkItemsList
+        <WorkItemsTable
           teamId={MVP_TEAM_ID}
           items={top5WorkItems}
           title="Committed work (top 5 by hours)"
@@ -299,7 +249,7 @@ export default async function DashboardPage({
           }
         />
       </section>
-    </main>
+    </div>
   );
 }
 

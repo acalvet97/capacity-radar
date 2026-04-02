@@ -4,7 +4,8 @@ import { ymdToUtcDate, diffDaysUtc } from "@/lib/dates";
 export type ImpactLevel = "low" | "medium" | "high";
 
 /**
- * Compute weeks spanned by a work item (start to deadline, or start to viewEnd if no deadline).
+ * Weeks spanned by a work item (start to deadline, or start to viewEnd if no deadline).
+ * Clamped to a minimum of 1 week so short tasks are treated as "this week" for load.
  */
 function itemSpanWeeks(
   item: WorkItemRow,
@@ -16,11 +17,12 @@ function itemSpanWeeks(
   const startD = ymdToUtcDate(start);
   const endD = ymdToUtcDate(end);
   const days = diffDaysUtc(endD, startD) + 1;
-  return Math.max(1 / 7, days / 7);
+  return Math.max(1, days / 7);
 }
 
 /**
- * Weekly load = estimated_hours / span_weeks (hours per week in the item's window).
+ * Weekly load = estimated_hours / max(1 week, item_span_weeks).
+ * E.g. 2.5h over 2 days ⇒ 2.5h/week; 40h over 4 weeks ⇒ 10h/week.
  */
 export function weeklyLoadInWindow(
   item: WorkItemRow,

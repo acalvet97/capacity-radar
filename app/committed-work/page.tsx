@@ -4,7 +4,7 @@ export const revalidate = 0;
 import { MVP_TEAM_ID } from "@/lib/mvpTeam";
 import { getWorkItemsForTeam } from "@/lib/db/getWorkItemsForTeam";
 import { getTeamBufferAndCapacity } from "@/lib/db/getTeamSettings";
-import { todayYmdInTz, ymdToUtcDate, utcDateToYmd, startOfIsoWeekUtc, addDaysUtc } from "@/lib/dates";
+import { DEFAULT_TZ, todayYmdInTz, ymdToUtcDate, utcDateToYmd, startOfIsoWeekUtc, addDaysUtc } from "@/lib/dates";
 import { CommittedWorkList } from "./CommittedWorkList";
 import { CommittedWorkHeader } from "./CommittedWorkHeader";
 
@@ -19,13 +19,13 @@ export default async function CommittedWorkPage() {
     getTeamBufferAndCapacity(MVP_TEAM_ID),
   ]);
 
-  const todayYmd = todayYmdInTz("Europe/Madrid");
+  const todayYmd = todayYmdInTz(DEFAULT_TZ);
   const viewStart = startOfIsoWeekUtc(ymdToUtcDate(todayYmd));
   const viewStartYmd = utcDateToYmd(viewStart);
   const viewEndYmd = utcDateToYmd(addDaysUtc(viewStart, 27));
 
   return (
-    <main className="mx-auto max-w-6xl w-full py-[52px] px-4">
+    <div className="mx-auto max-w-6xl w-full py-[52px] px-4">
       <CommittedWorkHeader />
 
       <section className="space-y-4">
@@ -37,6 +37,6 @@ export default async function CommittedWorkPage() {
           weeklyCapacityHours={weeklyCapacity}
         />
       </section>
-    </main>
+    </div>
   );
 }

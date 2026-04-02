@@ -8,16 +8,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { VIEW_LABELS, VIEW_ORDER, type ViewKey } from "@/lib/dashboardConstants";
 
-export type ViewKey = "month" | "4w" | "12w" | "quarter" | "6m";
-
-export function DashboardViewSelector({
-  view,
-  horizonHint,
-}: {
-  view: ViewKey;
-  horizonHint?: string;
-}) {
+export function DashboardViewSelector({ view }: { view: ViewKey }) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -26,7 +19,6 @@ export function DashboardViewSelector({
     const params = new URLSearchParams(searchParams?.toString());
     params.set("view", nextView);
 
-    // ✅ always navigate with pathname + query
     router.push(`${pathname}?${params.toString()}`);
   }
 
@@ -36,15 +28,12 @@ export function DashboardViewSelector({
         <SelectValue placeholder="Choose a view" />
       </SelectTrigger>
       <SelectContent>
-        <SelectItem value="month">Current month</SelectItem>
-        <SelectItem value="4w">Next 4 weeks</SelectItem>
-        <SelectItem value="12w">Next 12 weeks</SelectItem>
-        <SelectItem value="quarter">Current Quarter</SelectItem>
-        <SelectItem value="6m">6 months</SelectItem>
+        {VIEW_ORDER.map((key) => (
+          <SelectItem key={key} value={key}>
+            {VIEW_LABELS[key]}
+          </SelectItem>
+        ))}
       </SelectContent>
     </Select>
   );
 }
-
-
-

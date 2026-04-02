@@ -99,14 +99,14 @@ export function CommittedWorkHeader() {
           side="right"
           className="flex h-full flex-col gap-0 overflow-hidden sm:max-w-md"
         >
-          <SheetHeader className="shrink-0">
+          <SheetHeader className="shrink-0 p-5">
             <SheetTitle>Add existing commitment</SheetTitle>
           </SheetHeader>
           <div className="min-h-0 flex-1 overflow-y-auto">
             <form
               id="add-commitment-form"
               onSubmit={handleSubmit}
-              className="flex flex-col gap-4 px-4 py-4"
+              className="flex flex-col gap-4 px-5 py-5"
             >
               <div className="space-y-2">
                 <Label htmlFor="add-name">Name</Label>
@@ -166,7 +166,7 @@ export function CommittedWorkHeader() {
               </div>
             </form>
           </div>
-          <SheetFooter className="shrink-0 border-t border-border px-4 py-4">
+          <SheetFooter className="shrink-0 border-t border-border px-5 py-5">
             <Button
               type="submit"
               form="add-commitment-form"

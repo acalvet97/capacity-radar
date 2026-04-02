@@ -1,6 +1,7 @@
 // lib/dates.ts
 
-const DEFAULT_TZ = "Europe/Madrid";
+/** App-wide default for "today" and date-only calculations (team locale). */
+export const DEFAULT_TZ = "Europe/Madrid";
 
 /**
  * Returns today's date as YYYY-MM-DD in the given timezone.

@@ -170,7 +170,7 @@ export function TeamCapacitySection({ initialMembers }: { initialMembers: TeamMe
           <div className="rounded-md border overflow-hidden">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b bg-muted/50">
+                <tr className="border-b bg-muted">
                   <th className="text-left font-medium px-3 py-2">Name</th>
                   <th className="text-left font-medium px-3 py-2 w-[140px]">Hours per week</th>
                   <th className="w-10" />

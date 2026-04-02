@@ -23,6 +23,8 @@ import { WeekUtilizationBar } from "@/components/dashboard/WeekUtilizationBar";
 import type { DashboardSnapshot } from "@/lib/dashboardEngine";
 import { exposureBucketFromUtilization } from "@/lib/dashboardEngine";
 import {
+  VIEW_LABELS,
+  VIEW_ORDER,
   getViewLabel,
   exposureBucketLabel,
   type ViewKey,
@@ -123,11 +125,11 @@ export function EvaluateClient({ before, view }: { before: DashboardSnapshot; vi
                   <SelectValue placeholder="Choose a view" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="month">Current month</SelectItem>
-                  <SelectItem value="4w">Next 4 weeks</SelectItem>
-                  <SelectItem value="12w">Next 12 weeks</SelectItem>
-                  <SelectItem value="quarter">Current Quarter</SelectItem>
-                  <SelectItem value="6m">6 months</SelectItem>
+                  {VIEW_ORDER.map((key) => (
+                    <SelectItem key={key} value={key}>
+                      {VIEW_LABELS[key]}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
 
