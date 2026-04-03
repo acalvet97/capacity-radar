@@ -349,11 +349,17 @@ export function EvaluateClient({
   const hoursDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const threadRef = useRef<HTMLDivElement>(null);
   const chatInputRef = useRef<HTMLTextAreaElement>(null);
-  // Streaming text is written directly to the DOM to avoid re-rendering the
-  // whole thread on every chunk. streamingBufferRef holds the accumulated text
-  // so that any React re-render that happens mid-stream reads the correct value.
+  // Streaming text is written to the DOM via a render queue rather than directly
+  // on each chunk. This produces a smooth typewriter effect even when chunks
+  // arrive in bursts. streamingBufferRef tracks what has actually been rendered.
   const streamingBufferRef = useRef("");
   const streamingElRef = useRef<HTMLSpanElement>(null);
+  // renderQueueRef: text waiting to be rendered by the interval
+  // renderIntervalRef: the setInterval handle for the typewriter ticker
+  // isChatLoadingRef: mirrors isChatLoading so the interval closure sees it without staleness
+  const renderQueueRef = useRef<string>("");
+  const renderIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const isChatLoadingRef = useRef(false);
   const formFieldsRef = useRef({
     name,
     hours,
@@ -362,6 +368,24 @@ export function EvaluateClient({
     allocationMode,
   });
   formFieldsRef.current = { name, hours, startYmd, deadlineYmd, allocationMode };
+
+  // Pulls 3 characters per tick (30 ms) from the render queue and writes them
+  // to the DOM. 3 chars @ 30 ms ≈ 100 chars/sec — fast typing pace.
+  // Self-terminates when the queue is empty and the stream is done.
+  const startRenderInterval = useCallback(() => {
+    if (renderIntervalRef.current) return; // already running
+    renderIntervalRef.current = setInterval(() => {
+      if (!renderQueueRef.current || !streamingElRef.current) return;
+      const batch = renderQueueRef.current.slice(0, 3);
+      renderQueueRef.current = renderQueueRef.current.slice(3);
+      streamingBufferRef.current += batch;
+      streamingElRef.current.textContent = streamingBufferRef.current;
+      if (!renderQueueRef.current && !isChatLoadingRef.current) {
+        clearInterval(renderIntervalRef.current!);
+        renderIntervalRef.current = null;
+      }
+    }, 30);
+  }, []);
 
   const safeHours = sanitizeHoursInput(hours);
 
@@ -539,11 +563,13 @@ export function EvaluateClient({
   const runChatRequest = useCallback(
     async (nextThread: EvaluateChatMessage[]) => {
       setChatError(null);
+      isChatLoadingRef.current = true;
       setIsChatLoading(true);
       setIsStreamingActive(false);
 
-      // Reset streaming buffer and add placeholder to thread
+      // Reset streaming state and add placeholder to thread
       streamingBufferRef.current = "";
+      renderQueueRef.current = "";
       const streamingMsg: EvaluateChatMessage = {
         role: "assistant",
         content: "",
@@ -569,6 +595,7 @@ export function EvaluateClient({
         const reader = res.body.getReader();
         const decoder = new TextDecoder();
         let buffer = "";
+        let messageText = ""; // prose text before STREAM_DELIMITER (set when delimiter arrives)
         let structuredData: EvaluateChatApiResponse | null = null;
         let streamingStarted = false;
 
@@ -576,53 +603,63 @@ export function EvaluateClient({
           const { done, value } = await reader.read();
           if (done) break;
 
-          buffer += decoder.decode(value, { stream: true });
+          const newText = decoder.decode(value, { stream: true });
+          buffer += newText;
 
           const delimIdx = buffer.indexOf(STREAM_DELIMITER);
 
           if (delimIdx === -1) {
-            // No delimiter yet — write text directly to the DOM node.
-            // streamingBufferRef stays in sync so any React re-render that
-            // fires mid-stream (e.g. setIsStreamingActive) reads the right text.
-            streamingBufferRef.current = buffer;
-            if (streamingElRef.current) {
-              streamingElRef.current.textContent = buffer;
-            }
-            if (buffer.length > 0 && !streamingStarted) {
+            // No delimiter yet — push new text into the render queue.
+            // The interval (startRenderInterval) pulls characters and writes
+            // them to the DOM, producing the typewriter effect.
+            renderQueueRef.current += newText;
+            startRenderInterval();
+            if (newText.length > 0 && !streamingStarted) {
               streamingStarted = true;
               setIsStreamingActive(true); // triggers exactly one re-render
             }
           } else {
-            // Delimiter found — split text from structured JSON
-            const messageText = buffer.slice(0, delimIdx);
+            // STREAM_DELIMITER found — extract prose and structured JSON.
+            messageText = buffer.slice(0, delimIdx);
             const jsonStr = buffer.slice(delimIdx + STREAM_DELIMITER.length);
 
             try {
               structuredData = JSON.parse(jsonStr) as EvaluateChatApiResponse;
             } catch {
-              // JSON may be split across chunks; will be complete on next read or when done
+              // JSON may be split across chunks; complete on next read or when done
             }
 
-            // Commit final text to React state (single setMessages for the whole stream)
-            streamingBufferRef.current = "";
-            setMessages((prev) => {
-              const updated = [...prev];
-              updated[updated.length - 1] = {
-                ...updated[updated.length - 1],
-                content: messageText,
-                isStreaming: false,
-              };
-              return updated;
-            });
+            // Correct the render queue to the exact remaining prose. This handles
+            // the edge case where STREAM_DELIMITER arrived split across chunks and
+            // partial delimiter bytes were pushed to the queue before detection.
+            renderQueueRef.current = messageText.slice(streamingBufferRef.current.length);
           }
         }
 
-        // Ensure the streaming cursor is removed regardless of how the stream ended
+        // Stream is done — let the interval self-terminate once the queue drains.
+        isChatLoadingRef.current = false;
+
+        // Wait for the render queue to empty before committing the final React state.
+        // This ensures the typewriter animation completes before the streaming cursor
+        // is removed and the message content is locked in.
+        await new Promise<void>((resolve) => {
+          const check = setInterval(() => {
+            if (!renderQueueRef.current) {
+              clearInterval(check);
+              resolve();
+            }
+          }, 50);
+        });
+
+        // Commit final content and remove the streaming cursor in one update.
+        // Use messageText if the delimiter was found; fall back to the full buffer
+        // (delimiter-less response) so graceful-degradation prose still renders.
+        const finalText = messageText || buffer;
         setMessages((prev) => {
           const updated = [...prev];
           const last = updated[updated.length - 1];
           if (last?.isStreaming) {
-            updated[updated.length - 1] = { ...last, isStreaming: false };
+            updated[updated.length - 1] = { ...last, content: finalText, isStreaming: false };
           }
           return updated;
         });
@@ -721,6 +758,11 @@ export function EvaluateClient({
           return updated;
         });
       } finally {
+        // Stop the typewriter interval and clear any residual queue.
+        clearInterval(renderIntervalRef.current ?? undefined);
+        renderIntervalRef.current = null;
+        renderQueueRef.current = "";
+        isChatLoadingRef.current = false;
         setIsChatLoading(false);
         setIsStreamingActive(false);
         requestAnimationFrame(() => {
@@ -728,7 +770,7 @@ export function EvaluateClient({
         });
       }
     },
-    [snapshot, todayYmd]
+    [snapshot, todayYmd, startRenderInterval]
   );
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
