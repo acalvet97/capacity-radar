@@ -7,7 +7,7 @@ export type TeamMemberRow = {
 };
 
 export async function getTeamMembers(teamId: string): Promise<TeamMemberRow[]> {
-  const supabase = supabaseServer();
+  const supabase = await supabaseServer();
   const { data, error } = await supabase
     .from("team_members")
     .select("id, name, hours_per_cycle")

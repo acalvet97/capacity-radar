@@ -10,7 +10,7 @@ export async function deleteWorkItemAction(input: {
   teamId: string;
   workItemId: string;
 }) {
-  const supabase = supabaseServer();
+  const supabase = await supabaseServer();
 
   const { error } = await supabase
     .from("work_items")
@@ -44,7 +44,7 @@ export async function updateWorkItemAction(
   | { ok: true; item: { id: string } }
   | { ok: false; message: string }
 > {
-  const supabase = supabaseServer();
+  const supabase = await supabaseServer();
 
   const name = input.name?.trim() ?? "";
   if (!name) {

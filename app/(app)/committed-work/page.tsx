@@ -1,9 +1,9 @@
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-import { MVP_TEAM_ID } from "@/lib/mvpTeam";
 import { getWorkItemsForTeam } from "@/lib/db/getWorkItemsForTeam";
 import { getTeamBufferAndCapacity } from "@/lib/db/getTeamSettings";
+import { getTeamIdForUser } from "@/lib/db/getTeamIdForUser";
 import { DEFAULT_TZ, todayYmdInTz, ymdToUtcDate, utcDateToYmd, startOfIsoWeekUtc, addDaysUtc } from "@/lib/dates";
 import { CommittedWorkList } from "./CommittedWorkList";
 import { CommittedWorkHeader } from "./CommittedWorkHeader";
@@ -14,9 +14,11 @@ export const metadata = {
 };
 
 export default async function CommittedWorkPage() {
+  const teamId = await getTeamIdForUser();
+
   const [workItems, { weeklyCapacity }] = await Promise.all([
-    getWorkItemsForTeam(MVP_TEAM_ID),
-    getTeamBufferAndCapacity(MVP_TEAM_ID),
+    getWorkItemsForTeam(teamId),
+    getTeamBufferAndCapacity(teamId),
   ]);
 
   const todayYmd = todayYmdInTz(DEFAULT_TZ);
@@ -30,7 +32,7 @@ export default async function CommittedWorkPage() {
 
       <section className="space-y-4">
         <CommittedWorkList
-          teamId={MVP_TEAM_ID}
+          teamId={teamId}
           items={workItems}
           viewStartYmd={viewStartYmd}
           viewEndYmd={viewEndYmd}

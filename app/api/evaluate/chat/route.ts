@@ -1,5 +1,6 @@
-import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
+import { supabaseServer } from "@/lib/supabaseServer";
+import { NextResponse } from "next/server";
 
 import type { DashboardSnapshot } from "@/lib/dashboardEngine";
 import type {
@@ -7,6 +8,7 @@ import type {
   EvaluateChatApiResponse,
   ExtractedWorkParams,
 } from "@/lib/evaluateChatTypes";
+import { STREAM_DELIMITER } from "@/lib/evaluateChatTypes";
 import {
   buildNewWorkInputFromExtracted,
   buildSnapshotDigest,
@@ -34,6 +36,12 @@ function toAnthropicMessages(messages: EvaluateChatMessage[]): {
 }
 
 export async function POST(req: Request) {
+  const supabase = await supabaseServer();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     return NextResponse.json(
@@ -63,114 +71,156 @@ export async function POST(req: Request) {
   const systemPrompt = buildSystemPrompt(snapshotDigestText, todayYmd);
 
   const anthropic = new Anthropic({ apiKey });
+  const encoder = new TextEncoder();
 
-  let rawText: string;
-  try {
-    const res = await anthropic.messages.create({
-      model: MODEL,
-      max_tokens: 2048,
-      system: systemPrompt,
-      messages: toAnthropicMessages(messages),
-    });
-    rawText = res.content
-      .filter((b) => b.type === "text")
-      .map((b) => ("text" in b ? b.text : ""))
-      .join("\n");
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : "Request failed";
-    return NextResponse.json({ error: msg }, { status: 502 });
-  }
+  const stream = new ReadableStream({
+    async start(controller) {
+      try {
+        // First call (non-streaming): extract intent, params, readyToEvaluate
+        const firstRes = await anthropic.messages.create({
+          model: MODEL,
+          max_tokens: 2048,
+          system: systemPrompt,
+          messages: toAnthropicMessages(messages),
+        });
+        const rawText = firstRes.content
+          .filter((b) => b.type === "text")
+          .map((b) => ("text" in b ? b.text : ""))
+          .join("\n");
 
-  const parsed = parseModelJsonResponse(rawText);
+        const parsed = parseModelJsonResponse(rawText);
 
-  if (parsed.intent === "query" || parsed.intent === "ambiguous") {
-    const out: EvaluateChatApiResponse = {
-      message: parsed.message,
-      intent: parsed.intent,
-      extractedParams: null,
-      readyToEvaluate: false,
-    };
-    return NextResponse.json(out);
-  }
+        // Query / ambiguous: send message text as single chunk, then structured data
+        if (parsed.intent === "query" || parsed.intent === "ambiguous") {
+          controller.enqueue(encoder.encode(parsed.message));
+          const out: EvaluateChatApiResponse = {
+            message: parsed.message,
+            intent: parsed.intent,
+            extractedParams: null,
+            readyToEvaluate: false,
+          };
+          controller.enqueue(encoder.encode(STREAM_DELIMITER + JSON.stringify(out)));
+          return;
+        }
 
-  const merged: ExtractedWorkParams = {
-    allocationMode: "fill_capacity",
-    ...(parsed.extractedParams ?? {}),
-    startYmd: parsed.extractedParams?.startYmd ?? todayYmd,
-  };
+        // Evaluate intent: check if we can run the engine
+        const merged: ExtractedWorkParams = {
+          allocationMode: "fill_capacity",
+          ...(parsed.extractedParams ?? {}),
+          startYmd: parsed.extractedParams?.startYmd ?? todayYmd,
+        };
+        const input = buildNewWorkInputFromExtracted(merged, { todayYmd });
+        const canRun = parsed.readyToEvaluate && input !== null;
 
-  const input = buildNewWorkInputFromExtracted(merged, { todayYmd });
-  const canRun = parsed.readyToEvaluate && input !== null;
+        if (!canRun || !input) {
+          controller.enqueue(encoder.encode(parsed.message));
+          const out: EvaluateChatApiResponse = {
+            message: parsed.message,
+            intent: "evaluate",
+            extractedParams: parsed.extractedParams,
+            readyToEvaluate: parsed.readyToEvaluate,
+          };
+          controller.enqueue(encoder.encode(STREAM_DELIMITER + JSON.stringify(out)));
+          return;
+        }
 
-  if (!canRun || !input) {
-    const out: EvaluateChatApiResponse = {
-      message: parsed.message,
-      intent: "evaluate",
-      extractedParams: parsed.extractedParams,
-      readyToEvaluate: parsed.readyToEvaluate,
-    };
-    return NextResponse.json(out);
-  }
+        // Run engine, then stream narration
+        const { evaluation, digest: engineDigest, scenarios } = summarizeEngineForClient(
+          snapshot,
+          input
+        );
 
-  const { evaluation, digest: engineDigest, scenarios } = summarizeEngineForClient(
-    snapshot,
-    input
-  );
+        let finalMessage = parsed.message;
+        try {
+          const narrStream = await anthropic.messages.stream({
+            model: MODEL,
+            max_tokens: 700,
+            system: NARRATION_SYSTEM,
+            messages: [
+              {
+                role: "user",
+                content: JSON.stringify({
+                  engine: {
+                    peakUtilizationPct: evaluation.after.maxUtilizationPct,
+                    overallUtilizationPct: evaluation.after.overallUtilizationPct,
+                    fitsWithinCapacity: engineDigest.fitsWithinCapacity,
+                    weeksInSpan: evaluation.applied.weeksCount,
+                    totalCommittedAfter: evaluation.after.totalCommittedHours,
+                    totalCapacityInHorizon: evaluation.after.totalCapacityHours,
+                  },
+                  scenarios: scenarios.map((s) => ({
+                    id: s.id,
+                    title: s.title,
+                    description: s.description,
+                    peakAfter: s.evaluation.after.maxUtilizationPct,
+                    fits: s.evaluation.after.maxUtilizationPct <= 100,
+                  })),
+                }),
+              },
+            ],
+          });
 
-  let finalMessage = parsed.message;
-  try {
-    const narr = await anthropic.messages.create({
-      model: MODEL,
-      max_tokens: 700,
-      system: NARRATION_SYSTEM,
-      messages: [
-        {
-          role: "user",
-          content: JSON.stringify({
-            engine: {
-              peakUtilizationPct: evaluation.after.maxUtilizationPct,
-              overallUtilizationPct: evaluation.after.overallUtilizationPct,
-              fitsWithinCapacity: engineDigest.fitsWithinCapacity,
-              weeksInSpan: evaluation.applied.weeksCount,
-              totalCommittedAfter: evaluation.after.totalCommittedHours,
-              totalCapacityInHorizon: evaluation.after.totalCapacityHours,
-            },
-            scenarios: scenarios.map((s) => ({
-              id: s.id,
-              title: s.title,
-              description: s.description,
-              peakAfter: s.evaluation.after.maxUtilizationPct,
-              fits: s.evaluation.after.maxUtilizationPct <= 100,
-            })),
-          }),
-        },
-      ],
-    });
-    const narrText = narr.content
-      .filter((b) => b.type === "text")
-      .map((b) => ("text" in b ? b.text : ""))
-      .join("\n")
-      .trim();
-    if (narrText) finalMessage = narrText;
-  } catch {
-    finalMessage = engineDigest.fitsWithinCapacity
-      ? `This plan peaks at ${engineDigest.peakUtilizationPct}% utilization across the horizon.`
-      : `This plan peaks at ${engineDigest.peakUtilizationPct}% utilization (over capacity). Consider adjusting deadline, scope, or allocation.`;
-  }
+          let narrText = "";
+          for await (const chunk of narrStream) {
+            if (
+              chunk.type === "content_block_delta" &&
+              chunk.delta.type === "text_delta"
+            ) {
+              const text = chunk.delta.text;
+              narrText += text;
+              controller.enqueue(encoder.encode(text));
+            }
+          }
+          if (narrText) finalMessage = narrText;
+        } catch {
+          finalMessage = engineDigest.fitsWithinCapacity
+            ? `This plan peaks at ${engineDigest.peakUtilizationPct}% utilization across the horizon.`
+            : `This plan peaks at ${engineDigest.peakUtilizationPct}% utilization (over capacity). Consider adjusting deadline, scope, or allocation.`;
+          controller.enqueue(encoder.encode(finalMessage));
+        }
 
-  const out: EvaluateChatApiResponse = {
-    message: finalMessage,
-    intent: "evaluate",
-    extractedParams: parsed.extractedParams,
-    readyToEvaluate: true,
-    engineDigest: {
-      peakUtilizationPct: engineDigest.peakUtilizationPct,
-      overallUtilizationPct: engineDigest.overallUtilizationPct,
-      fitsWithinCapacity: engineDigest.fitsWithinCapacity,
-      weeksInSpan: engineDigest.weeksInSpan,
-      scenarioTitles: engineDigest.scenarioTitles,
+        const out: EvaluateChatApiResponse = {
+          message: finalMessage,
+          intent: "evaluate",
+          extractedParams: parsed.extractedParams,
+          readyToEvaluate: true,
+          engineDigest: {
+            peakUtilizationPct: engineDigest.peakUtilizationPct,
+            overallUtilizationPct: engineDigest.overallUtilizationPct,
+            fitsWithinCapacity: engineDigest.fitsWithinCapacity,
+            weeksInSpan: engineDigest.weeksInSpan,
+            scenarioTitles: engineDigest.scenarioTitles,
+          },
+        };
+        controller.enqueue(encoder.encode(STREAM_DELIMITER + JSON.stringify(out)));
+      } catch (err) {
+        const errorPayload: EvaluateChatApiResponse = {
+          message: "I'm having trouble with that. Could you try again?",
+          intent: "ambiguous",
+          extractedParams: null,
+          readyToEvaluate: false,
+        };
+        try {
+          controller.enqueue(
+            encoder.encode(STREAM_DELIMITER + JSON.stringify(errorPayload))
+          );
+        } catch {
+          // controller may already be closed
+        }
+        if (err instanceof Error) {
+          console.error("[evaluate/chat] stream error:", err.message);
+        }
+      } finally {
+        controller.close();
+      }
     },
-  };
+  });
 
-  return NextResponse.json(out);
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "text/plain; charset=utf-8",
+      "Transfer-Encoding": "chunked",
+      "Cache-Control": "no-cache",
+    },
+  });
 }

@@ -1,7 +1,6 @@
 "use client";
 
-import { exposureBucketFromUtilization } from "@/lib/dashboardEngine";
-import { EXPOSURE_BAR_FILL } from "@/lib/dashboardConstants";
+import { exposureBucketFromUtilization, EXPOSURE_BAR_FILL } from "@/lib/dashboardConstants";
 
 type Props = {
   capacityHours: number;

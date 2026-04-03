@@ -1,9 +1,9 @@
-// app/evaluate/actions.ts
+// app/(app)/evaluate/actions.ts
 "use server";
 
 import { revalidatePath } from "next/cache";
 import { supabaseServer } from "@/lib/supabaseServer";
-import { MVP_TEAM_ID } from "@/lib/mvpTeam";
+import { getTeamIdForUser } from "@/lib/db/getTeamIdForUser";
 import { isValidYmd } from "@/lib/dates";
 import { sanitizeHoursInput } from "@/lib/hours";
 
@@ -16,7 +16,6 @@ export type CommitWorkInput = {
 };
 
 export async function commitWork(input: CommitWorkInput) {
-  // Basic validation (MVP)
   const name = input.name?.trim() ?? "";
   if (!name) throw new Error("Work name is required.");
 
@@ -39,10 +38,11 @@ export async function commitWork(input: CommitWorkInput) {
     throw new Error("Deadline cannot be before start date.");
   }
 
-  const supabase = supabaseServer();
+  const teamId = await getTeamIdForUser();
+  const supabase = await supabaseServer();
 
   const payload = {
-    team_id: MVP_TEAM_ID,
+    team_id: teamId,
     name,
     estimated_hours: totalHours,
     start_date: startYmd,

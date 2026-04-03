@@ -1,6 +1,6 @@
 // lib/evaluateEngine.ts
 import type { DashboardSnapshot, WeekSnapshot } from "@/lib/dashboardEngine";
-import { exposureBucketFromUtilization } from "@/lib/dashboardEngine";
+import { exposureBucketFromUtilization } from "@/lib/dashboardConstants";
 import { clamp, round1 } from "@/lib/utils";
 
 export type AllocationMode = "even" | "fill_capacity";

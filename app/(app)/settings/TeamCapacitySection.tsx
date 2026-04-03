@@ -7,7 +7,6 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { HOURS_STEP, sanitizeHoursInputAllowZero } from "@/lib/hours";
 import { cycleToWeekly, weeklyToCycle } from "@/lib/capacityUnits";
-import { MVP_TEAM_ID } from "@/lib/mvpTeam";
 import {
   updateTeamMembersHoursAction,
   createTeamMemberAction,
@@ -34,7 +33,13 @@ function toMemberRows(rows: TeamMemberRow[]): MemberRow[] {
   }));
 }
 
-export function TeamCapacitySection({ initialMembers }: { initialMembers: TeamMemberRow[] }) {
+export function TeamCapacitySection({
+  teamId,
+  initialMembers,
+}: {
+  teamId: string;
+  initialMembers: TeamMemberRow[];
+}) {
   const router = useRouter();
   const [members, setMembers] = React.useState<MemberRow[]>(() => toMemberRows(initialMembers));
   const [isPending, startTransition] = React.useTransition();
@@ -107,7 +112,7 @@ export function TeamCapacitySection({ initialMembers }: { initialMembers: TeamMe
       return;
     }
     startTransition(async () => {
-      const result = await deleteTeamMemberAction(MVP_TEAM_ID, row.id);
+      const result = await deleteTeamMemberAction(teamId, row.id);
       if (result.ok) {
         setMembers((prev) => prev.filter((_, i) => i !== index));
         toast.success("Member removed.");
@@ -132,7 +137,7 @@ export function TeamCapacitySection({ initialMembers }: { initialMembers: TeamMe
         hours_per_cycle: weeklyToCycle(sanitizeHoursInputAllowZero(m.hoursInput)),
       }));
       if (updates.length) {
-        const res = await updateTeamMembersHoursAction(MVP_TEAM_ID, updates);
+        const res = await updateTeamMembersHoursAction(teamId, updates);
         if (!res.ok) {
           toast.error(res.message);
           return;
@@ -142,7 +147,7 @@ export function TeamCapacitySection({ initialMembers }: { initialMembers: TeamMe
         const name = (row.name ?? "").trim() || "New member";
         const hoursPerWeek = sanitizeHoursInputAllowZero(row.hoursInput);
         const res = await createTeamMemberAction(
-          MVP_TEAM_ID,
+          teamId,
           name,
           weeklyToCycle(hoursPerWeek)
         );

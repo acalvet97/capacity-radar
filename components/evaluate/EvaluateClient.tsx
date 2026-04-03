@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { ArrowUp } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,7 +22,7 @@ import {
   type EvaluateResult,
   type OverCapacityScenario,
 } from "@/lib/evaluateEngine";
-import { commitWork } from "@/app/evaluate/actions";
+import { commitWork } from "@/app/(app)/evaluate/actions";
 import { sanitizeHoursInput } from "@/lib/hours";
 import type {
   EvaluateChatMessage,
@@ -30,6 +31,13 @@ import type {
   CommitCardData,
   ChatIntent,
 } from "@/lib/evaluateChatTypes";
+import { STREAM_DELIMITER } from "@/lib/evaluateChatTypes";
+
+const INITIAL_GREETING: EvaluateChatMessage = {
+  role: "assistant",
+  content:
+    "Hey — describe work you want to evaluate, or ask me anything about your team's capacity. For example: 'Do we have room for a 40h project in May?' or 'When is the team least loaded?'",
+};
 
 function toApiMessages(messages: EvaluateChatMessage[]) {
   return messages.map(({ role, content }) => ({ role, content }));
@@ -307,47 +315,24 @@ function CommitCard({
   );
 }
 
-function TypingIndicator() {
-  return (
-    <div className="flex justify-start">
-      <div className="bg-muted rounded-2xl rounded-tl-sm px-4 py-3">
-        <div className="flex gap-1 items-center h-4">
-          {[0, 1, 2].map((i) => (
-            <span
-              key={i}
-              className="w-1.5 h-1.5 rounded-full bg-muted-foreground/50 animate-bounce"
-              style={{ animationDelay: `${i * 150}ms` }}
-            />
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export function EvaluateClient({
   snapshot,
   todayYmd,
+  displayName,
 }: {
   snapshot: DashboardSnapshot;
   todayYmd: string;
+  displayName: string;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [isChatLoading, setIsChatLoading] = useState(false);
+  const [isStreamingActive, setIsStreamingActive] = useState(false);
   const [chatError, setChatError] = useState<string | null>(null);
 
   const defaultStart = snapshot.horizonWeeks[0]?.weekStartYmd ?? todayYmd;
 
-  const initialGreeting =
-    "Hey — describe work you want to evaluate, or ask me anything about your team's capacity. For example: 'Do we have room for a 40h project in May?' or 'When is the team least loaded?'";
-
-  const [messages, setMessages] = useState<EvaluateChatMessage[]>([
-    {
-      role: "assistant",
-      content: initialGreeting,
-    },
-  ]);
+  const [messages, setMessages] = useState<EvaluateChatMessage[]>([INITIAL_GREETING]);
   const [chatInput, setChatInput] = useState("");
 
   const [name, setName] = useState("New work item");
@@ -356,11 +341,19 @@ export function EvaluateClient({
   const [deadlineYmd, setDeadlineYmd] = useState<string>("");
   const [allocationMode, setAllocationMode] = useState<AllocationMode>("fill_capacity");
 
+  // Derived: has the conversation started (at least one user message)?
+  const hasStarted = messages.some((m) => m.role === "user");
+
   const [resultFlashKey, setResultFlashKey] = useState(0);
   const [commitSuccess, setCommitSuccess] = useState(false);
   const hoursDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const threadRef = useRef<HTMLDivElement>(null);
   const chatInputRef = useRef<HTMLTextAreaElement>(null);
+  // Streaming text is written directly to the DOM to avoid re-rendering the
+  // whole thread on every chunk. streamingBufferRef holds the accumulated text
+  // so that any React re-render that happens mid-stream reads the correct value.
+  const streamingBufferRef = useRef("");
+  const streamingElRef = useRef<HTMLSpanElement>(null);
   const formFieldsRef = useRef({
     name,
     hours,
@@ -389,10 +382,11 @@ export function EvaluateClient({
   };
 
   useEffect(() => {
+    if (!hasStarted) return;
     const el = threadRef.current;
     if (!el) return;
     el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
-  }, [messages, isChatLoading]);
+  }, [messages, isChatLoading, hasStarted]);
 
   const runSilentEvaluationAndUpdateMessage = useCallback(
     (merged: {
@@ -546,6 +540,16 @@ export function EvaluateClient({
     async (nextThread: EvaluateChatMessage[]) => {
       setChatError(null);
       setIsChatLoading(true);
+      setIsStreamingActive(false);
+
+      // Reset streaming buffer and add placeholder to thread
+      streamingBufferRef.current = "";
+      const streamingMsg: EvaluateChatMessage = {
+        role: "assistant",
+        content: "",
+        isStreaming: true,
+      };
+      setMessages([...nextThread, streamingMsg]);
 
       try {
         const res = await fetch("/api/evaluate/chat", {
@@ -558,119 +562,202 @@ export function EvaluateClient({
           }),
         });
 
-        const data = (await res.json()) as EvaluateChatApiResponse & { error?: string };
-
-        if (!res.ok) {
-          throw new Error(data.error ?? "Chat request failed");
+        if (!res.ok || !res.body) {
+          throw new Error("Stream request failed");
         }
 
-        const intent: ChatIntent = data.intent ?? "evaluate";
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        let structuredData: EvaluateChatApiResponse | null = null;
+        let streamingStarted = false;
 
-        if (intent === "query" || intent === "ambiguous") {
-          setMessages([
-            ...nextThread,
-            {
-              role: "assistant",
-              content: data.message,
-              intent,
-            },
-          ]);
-          return;
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+
+          const delimIdx = buffer.indexOf(STREAM_DELIMITER);
+
+          if (delimIdx === -1) {
+            // No delimiter yet — write text directly to the DOM node.
+            // streamingBufferRef stays in sync so any React re-render that
+            // fires mid-stream (e.g. setIsStreamingActive) reads the right text.
+            streamingBufferRef.current = buffer;
+            if (streamingElRef.current) {
+              streamingElRef.current.textContent = buffer;
+            }
+            if (buffer.length > 0 && !streamingStarted) {
+              streamingStarted = true;
+              setIsStreamingActive(true); // triggers exactly one re-render
+            }
+          } else {
+            // Delimiter found — split text from structured JSON
+            const messageText = buffer.slice(0, delimIdx);
+            const jsonStr = buffer.slice(delimIdx + STREAM_DELIMITER.length);
+
+            try {
+              structuredData = JSON.parse(jsonStr) as EvaluateChatApiResponse;
+            } catch {
+              // JSON may be split across chunks; will be complete on next read or when done
+            }
+
+            // Commit final text to React state (single setMessages for the whole stream)
+            streamingBufferRef.current = "";
+            setMessages((prev) => {
+              const updated = [...prev];
+              updated[updated.length - 1] = {
+                ...updated[updated.length - 1],
+                content: messageText,
+                isStreaming: false,
+              };
+              return updated;
+            });
+          }
         }
 
-        let merged = {
-          name,
-          hours,
-          startYmd,
-          deadlineYmd,
-          allocationMode,
-        };
+        // Ensure the streaming cursor is removed regardless of how the stream ended
+        setMessages((prev) => {
+          const updated = [...prev];
+          const last = updated[updated.length - 1];
+          if (last?.isStreaming) {
+            updated[updated.length - 1] = { ...last, isStreaming: false };
+          }
+          return updated;
+        });
 
-        if (data.extractedParams) {
-          merged = mergeExtractedIntoForm(merged, data.extractedParams);
-          setName(merged.name);
-          setHours(merged.hours);
-          setStartYmd(merged.startYmd);
-          setDeadlineYmd(merged.deadlineYmd);
-          setAllocationMode(merged.allocationMode);
-        }
+        // Stream ended — process structured data
+        if (structuredData) {
+          const f = formFieldsRef.current;
+          let merged = {
+            name: f.name,
+            hours: f.hours,
+            startYmd: f.startYmd,
+            deadlineYmd: f.deadlineYmd,
+            allocationMode: f.allocationMode,
+          };
 
-        const safe = sanitizeHoursInput(merged.hours);
-        const newWorkInput = buildNewWorkInputFromMerged(merged, safe);
-
-        let resultCard: ResultCardData | undefined;
-        let scenarioCards: OverCapacityScenario[] | undefined;
-        let commitCard: CommitCardData | undefined;
-
-        if (data.readyToEvaluate && newWorkInput) {
-          const evalResult = evaluateNewWork(snapshot, newWorkInput);
-          resultCard = buildResultCardData(evalResult);
-
-          if (!fitsWithinCapacity(evalResult)) {
-            scenarioCards = buildOverCapacityScenarios(snapshot, newWorkInput);
+          if (structuredData.extractedParams) {
+            merged = mergeExtractedIntoForm(merged, structuredData.extractedParams);
+            setName(merged.name);
+            setHours(merged.hours);
+            setStartYmd(merged.startYmd);
+            setDeadlineYmd(merged.deadlineYmd);
+            setAllocationMode(merged.allocationMode);
           }
 
-          commitCard = {
-            name: newWorkInput.name,
-            totalHours: newWorkInput.totalHours,
-            startYmd: newWorkInput.startYmd,
-            deadlineYmd: newWorkInput.deadlineYmd,
-            allocationMode: newWorkInput.allocationMode ?? "fill_capacity",
-          };
-        }
+          const intent: ChatIntent = structuredData.intent ?? "ambiguous";
 
-        setMessages([
-          ...nextThread,
-          {
-            role: "assistant",
-            content: data.message,
-            intent: "evaluate",
-            resultCard,
-            scenarioCards,
-            commitCard,
-          },
-        ]);
+          if (intent === "query" || intent === "ambiguous") {
+            setMessages((prev) => {
+              const updated = [...prev];
+              updated[updated.length - 1] = {
+                ...updated[updated.length - 1],
+                intent,
+                isStreaming: false,
+              };
+              return updated;
+            });
+            return;
+          }
+
+          const safe = sanitizeHoursInput(merged.hours);
+          const newWorkInput = buildNewWorkInputFromMerged(merged, safe);
+
+          if (structuredData.readyToEvaluate && newWorkInput) {
+            const evalResult = evaluateNewWork(snapshot, newWorkInput);
+            const resultCard = buildResultCardData(evalResult);
+            const scenarioCards = !fitsWithinCapacity(evalResult)
+              ? buildOverCapacityScenarios(snapshot, newWorkInput)
+              : undefined;
+            const commitCard: CommitCardData = {
+              name: newWorkInput.name,
+              totalHours: newWorkInput.totalHours,
+              startYmd: newWorkInput.startYmd,
+              deadlineYmd: newWorkInput.deadlineYmd,
+              allocationMode: newWorkInput.allocationMode ?? "fill_capacity",
+            };
+
+            setMessages((prev) => {
+              const updated = [...prev];
+              updated[updated.length - 1] = {
+                ...updated[updated.length - 1],
+                intent: "evaluate",
+                resultCard,
+                scenarioCards,
+                commitCard,
+                isStreaming: false,
+              };
+              return updated;
+            });
+          } else {
+            setMessages((prev) => {
+              const updated = [...prev];
+              updated[updated.length - 1] = {
+                ...updated[updated.length - 1],
+                intent,
+                isStreaming: false,
+              };
+              return updated;
+            });
+          }
+        }
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : "Something went wrong";
         setChatError(msg);
         toast.error(msg);
+        streamingBufferRef.current = "";
+        setMessages((prev) => {
+          const updated = [...prev];
+          const last = updated[updated.length - 1];
+          if (last?.isStreaming) {
+            updated[updated.length - 1] = {
+              ...last,
+              content: "I'm having trouble with that. Could you try again?",
+              isStreaming: false,
+            };
+          }
+          return updated;
+        });
       } finally {
         setIsChatLoading(false);
+        setIsStreamingActive(false);
         requestAnimationFrame(() => {
           chatInputRef.current?.focus();
         });
       }
     },
-    [allocationMode, deadlineYmd, hours, name, snapshot, startYmd, todayYmd]
+    [snapshot, todayYmd]
   );
 
-  function handleComposerKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    if (e.key !== "Enter" || e.shiftKey) return;
-    e.preventDefault();
-    if (isChatLoading || !chatInput.trim()) return;
-    e.currentTarget.form?.requestSubmit();
+  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      if (!isChatLoading && chatInput.trim()) {
+        sendChat();
+      }
+    }
   }
 
-  function sendChat(e?: React.FormEvent, overrideMessage?: string) {
+  function sendChat(
+    e?: React.FormEvent,
+    overrideMessage?: string,
+    overrideHistory?: EvaluateChatMessage[]
+  ) {
     e?.preventDefault();
     const text = (overrideMessage ?? chatInput).trim();
     if (!text || isChatLoading) return;
+    const historyToSend = overrideHistory ?? messages;
     const userMsg: EvaluateChatMessage = { role: "user", content: text };
-    const nextThread = [...messages, userMsg];
-    setMessages(nextThread);
-    if (overrideMessage === undefined) {
-      setChatInput("");
-    }
+    const nextThread = [...historyToSend, userMsg];
+    setChatError(null);
+    setChatInput("");
     void runChatRequest(nextThread);
   }
 
   function resetThreadAndForm() {
-    setMessages([
-      {
-        role: "assistant",
-        content: initialGreeting,
-      },
-    ]);
+    setMessages([INITIAL_GREETING]);
     setName("New work item");
     setHours("40");
     setStartYmd(defaultStart);
@@ -684,7 +771,12 @@ export function EvaluateClient({
   }
 
   function handlePostCommitTeamStatus() {
-    sendChat(undefined, "Show me the team status");
+    setName("New work item");
+    setHours("40");
+    setStartYmd(defaultStart);
+    setDeadlineYmd("");
+    setAllocationMode("fill_capacity");
+    sendChat(undefined, "Show me the team status", [INITIAL_GREETING]);
   }
 
   function resetFormOnly() {
@@ -737,100 +829,173 @@ export function EvaluateClient({
   const lastCommitIdx = findLastCommitAssistantIndex(messages);
 
   return (
-    <div className="flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden">
-      <div ref={threadRef} className="min-h-0 w-full flex-1 overflow-y-auto overflow-x-hidden">
-        <div className="mx-auto max-w-3xl space-y-6 px-4 py-6">
-        {messages.map((msg, i) => {
-          if (msg.role === "user") {
-            return (
-              <div key={i} className="flex justify-end">
-                <div className="bg-primary text-primary-foreground rounded-2xl rounded-tr-sm px-4 py-2.5 max-w-[75%] text-sm whitespace-pre-wrap">
-                  {msg.content}
-                </div>
-              </div>
-            );
-          }
-
-          if (msg.isPostCommit && msg.postCommitWorkName) {
-            const workName = msg.postCommitWorkName;
-            return (
-              <div key={i} className="flex justify-start">
-                <div className="bg-muted rounded-2xl rounded-tl-sm px-4 py-3 max-w-[90%] space-y-4 text-sm">
-                  <p>
-                    {workName} has been added to your team&apos;s committed work.
-                  </p>
-                  <p>What would you like to do next?</p>
-                  <div className="flex flex-col sm:flex-row gap-2 pt-1">
-                    <Button size="sm" variant="secondary" onClick={handlePostCommitEvaluateNew}>
-                      Evaluate new work
-                    </Button>
-                    <Button size="sm" variant="secondary" onClick={handlePostCommitTeamStatus}>
-                      See team status
-                    </Button>
-                    <Button size="sm" variant="secondary" onClick={() => router.push("/committed-work")}>
-                      View committed work
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            );
-          }
-
-          return (
-            <div key={i} className="flex justify-start">
-              <div className="bg-muted rounded-2xl rounded-tl-sm px-4 py-3 max-w-[90%] space-y-4 text-sm">
-                {msg.content ? <p className="whitespace-pre-wrap">{msg.content}</p> : null}
-                {msg.resultCard && (
-                  <ResultCard data={msg.resultCard} flashKey={resultFlashKey} />
-                )}
-                {msg.scenarioCards && msg.scenarioCards.length > 0 && (
-                  <ScenarioCards scenarios={msg.scenarioCards} onApply={applyScenario} />
-                )}
-                {msg.commitCard && i === lastCommitIdx && (
-                  <CommitCard
-                    data={commitDataFromForm}
-                    onChange={handleCommitCardChange}
-                    onCommit={handleCommit}
-                    onDiscard={discardCommit}
-                    isCommitting={isPending}
-                    canCommit={canCommit}
-                    showCommittedSuccess={commitSuccess}
-                  />
-                )}
-              </div>
-            </div>
-          );
-        })}
-        {isChatLoading && <TypingIndicator />}
+    <div className="relative flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden">
+      {/* Empty state — centred greeting + prominent input */}
+      <div
+        className={cn(
+          "absolute inset-0 z-10 flex flex-col items-center justify-center px-4 pb-8 gap-6",
+          "transition-opacity duration-150",
+          hasStarted ? "opacity-0 pointer-events-none" : "opacity-100"
+        )}
+      >
+        <div className="text-center space-y-2">
+          <h2 className="text-3xl font-semibold tracking-tight">
+            Hello, {displayName}
+          </h2>
+          <p className="text-muted-foreground text-base">
+            How can I help your team today?
+          </p>
         </div>
+
+        <form onSubmit={sendChat} className="w-full max-w-xl">
+          <div className="relative">
+            <textarea
+              value={chatInput}
+              onChange={(e) => setChatInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="New project? Team question? Just ask..."
+              rows={3}
+              disabled={isChatLoading}
+              className="w-full resize-none rounded-xl border bg-background px-4 py-3 pr-12 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+            />
+            <Button
+              type="submit"
+              size="icon"
+              disabled={isChatLoading || !chatInput.trim()}
+              className="absolute bottom-2.5 right-2.5 h-7 w-7 rounded-lg"
+            >
+              <ArrowUp className="h-4 w-4" />
+            </Button>
+          </div>
+        </form>
       </div>
 
-      <div className="shrink-0 w-full py-4">
-        <div className="mx-auto max-w-3xl px-4">
-        <form onSubmit={sendChat} className="flex gap-2 items-end">
-          <textarea
-            ref={chatInputRef}
-            value={chatInput}
-            onChange={(e) => setChatInput(e.target.value)}
-            onKeyDown={handleComposerKeyDown}
-            placeholder="New project? Team question? Just ask..."
-            disabled={isChatLoading}
-            rows={1}
-            className="flex-1 min-h-12 max-h-40 resize-none rounded-xl border border-input bg-muted px-4 py-3 text-sm leading-normal shadow-sm outline-none focus-visible:border-ring focus-visible:bg-background focus-visible:ring-ring/50 focus-visible:ring-[3px] disabled:opacity-50 overflow-y-auto"
-          />
-          <Button
-            type="submit"
-            size="icon-lg"
-            className="h-12 w-12 shrink-0 rounded-xl"
-            disabled={isChatLoading || !chatInput.trim()}
-            aria-label="Send message"
-          >
-            <ArrowUp className="size-5" />
-          </Button>
-        </form>
-        {chatError && (
-          <p className="mt-2 text-xs text-rose-600">{chatError}</p>
+      {/* Active state — thread + thinking indicator + input bar */}
+      <div
+        className={cn(
+          "flex min-h-0 flex-1 flex-col transition-opacity duration-150",
+          !hasStarted ? "opacity-0 pointer-events-none" : "opacity-100"
         )}
+      >
+        {/* Thread */}
+        <div ref={threadRef} className="min-h-0 w-full flex-1 overflow-y-auto overflow-x-hidden">
+          <div className="mx-auto max-w-3xl space-y-6 px-4 py-6">
+            {messages.map((msg, i) => {
+              if (msg.role === "user") {
+                return (
+                  <div key={i} className="flex justify-end">
+                    <div className="bg-primary text-primary-foreground rounded-2xl rounded-tr-sm px-4 py-2.5 max-w-[75%] text-sm whitespace-pre-wrap">
+                      {msg.content}
+                    </div>
+                  </div>
+                );
+              }
+
+              if (msg.isPostCommit && msg.postCommitWorkName) {
+                const workName = msg.postCommitWorkName;
+                return (
+                  <div key={i} className="space-y-4 text-sm">
+                    <div className="space-y-4">
+                      <p className="text-foreground leading-relaxed">
+                        {workName} has been added to your team&apos;s committed work.
+                      </p>
+                      <p className="text-foreground leading-relaxed">What would you like to do next?</p>
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        <Button size="sm" variant="secondary" onClick={handlePostCommitEvaluateNew}>
+                          Evaluate new work
+                        </Button>
+                        <Button size="sm" variant="secondary" onClick={handlePostCommitTeamStatus}>
+                          See team status
+                        </Button>
+                        <Button size="sm" variant="secondary" onClick={() => router.push("/committed-work")}>
+                          View committed work
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+
+              return (
+                <div key={i} className="space-y-4 text-sm">
+                  <div className="space-y-4">
+                    {(msg.content || msg.isStreaming) ? (
+                      <p className="whitespace-pre-wrap text-foreground leading-relaxed">
+                        {msg.isStreaming ? (
+                          // Live stream: render from the buffer ref so React re-renders
+                          // mid-stream always show the correct accumulated text.
+                          // The actual character-by-character updates happen via direct
+                          // DOM writes to streamingElRef — no setMessages per chunk.
+                          <>
+                            <span ref={streamingElRef}>{streamingBufferRef.current}</span>
+                            <span className="inline-block w-0.5 h-4 bg-foreground animate-pulse ml-0.5 align-middle" />
+                          </>
+                        ) : (
+                          msg.content
+                        )}
+                      </p>
+                    ) : null}
+                    {msg.resultCard && (
+                      <ResultCard data={msg.resultCard} flashKey={resultFlashKey} />
+                    )}
+                    {msg.scenarioCards && msg.scenarioCards.length > 0 && (
+                      <ScenarioCards scenarios={msg.scenarioCards} onApply={applyScenario} />
+                    )}
+                    {msg.commitCard && i === lastCommitIdx && (
+                      <CommitCard
+                        data={commitDataFromForm}
+                        onChange={handleCommitCardChange}
+                        onCommit={handleCommit}
+                        onDiscard={discardCommit}
+                        isCommitting={isPending}
+                        canCommit={canCommit}
+                        showCommittedSuccess={commitSuccess}
+                      />
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Thinking indicator — shown while loading but before streaming starts */}
+        {isChatLoading && !isStreamingActive && (
+          <div className="w-full">
+            <div className="mx-auto max-w-3xl px-4 py-2 text-xs text-muted-foreground animate-pulse">
+              Klyra is thinking...
+            </div>
+          </div>
+        )}
+
+        {/* Input bar */}
+        <div className="shrink-0 w-full py-4">
+          <div className="mx-auto max-w-3xl px-4">
+            <form onSubmit={sendChat} className="flex gap-2 items-end">
+              <textarea
+                ref={chatInputRef}
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="New project? Team question? Just ask..."
+                disabled={isChatLoading}
+                rows={1}
+                className="flex-1 resize-none rounded-xl border border-input bg-muted px-4 py-3 text-sm leading-normal max-h-40 shadow-sm outline-none focus-visible:border-ring focus-visible:bg-background focus-visible:ring-ring/50 focus-visible:ring-[3px] disabled:opacity-50 overflow-y-auto"
+              />
+              <Button
+                type="submit"
+                size="icon-lg"
+                className="h-12 w-12 shrink-0 rounded-xl"
+                disabled={isChatLoading || !chatInput.trim()}
+                aria-label="Send message"
+              >
+                <ArrowUp className="size-5" />
+              </Button>
+            </form>
+            {chatError && (
+              <p className="mt-2 text-xs text-rose-600">{chatError}</p>
+            )}
+          </div>
         </div>
       </div>
     </div>

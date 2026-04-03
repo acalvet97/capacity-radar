@@ -1,7 +1,14 @@
 // Shared UI constants and helpers for dashboard and evaluate screens.
 // Single source of truth for exposure bucket display (DRY).
 
-import type { Bucket } from "@/lib/dashboardEngine";
+export type Bucket = "low" | "medium" | "high";
+
+/** Single source of truth: map utilization % to exposure bucket. */
+export function exposureBucketFromUtilization(pct: number): Bucket {
+  if (pct < 80) return "low";
+  if (pct <= 90) return "medium";
+  return "high";
+}
 
 /** View key to human-readable label. */
 export type ViewKey = "month" | "4w" | "12w" | "quarter" | "6m";

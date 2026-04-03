@@ -1,14 +1,14 @@
-// app/dashboard/page.tsx
+// app/(app)/dashboard/page.tsx
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { WorkItemsTable } from "@/components/work-items/WorkItemsTable";
-import { MVP_TEAM_ID } from "@/lib/mvpTeam";
 import { getDashboardSnapshotFromDb, exposureBucketFromUtilization } from "@/lib/dashboardEngine";
 import { recomputeSnapshot } from "@/lib/evaluateEngine";
 import { getWorkItemsForTeam } from "@/lib/db/getWorkItemsForTeam";
+import { getTeamIdForUser } from "@/lib/db/getTeamIdForUser";
 
 import { DashboardViewSelector } from "@/components/dashboard/DashboardViewSelector";
 import { CardTitleWithTooltip } from "@/components/dashboard/CardTitleWithTooltip";
@@ -22,6 +22,14 @@ import {
 import { DEFAULT_TZ, todayYmdInTz, formatDateDdMmYyyy } from "@/lib/dates";
 import { normalizeViewSearchParam, weeksForHorizonView } from "@/lib/horizonView";
 
+function daysUntil(deadlineYmd: string, todayYmd: string): number {
+  const deadline = new Date(deadlineYmd + 'T00:00:00Z');
+  const today = new Date(todayYmd + 'T00:00:00Z');
+  return Math.ceil(
+    (deadline.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
+  );
+}
+
 export default async function DashboardPage({
   searchParams,
 }: {
@@ -32,8 +40,9 @@ export default async function DashboardPage({
   const todayYmd = todayYmdInTz(DEFAULT_TZ);
   const weeksInView = weeksForHorizonView(view, todayYmd);
 
-  // ✅ Always fetch full 26-week snapshot for underlying data
-  const fullSnapshot = await getDashboardSnapshotFromDb(MVP_TEAM_ID, {
+  const teamId = await getTeamIdForUser();
+
+  const fullSnapshot = await getDashboardSnapshotFromDb(teamId, {
     startYmd: todayYmd,
     weeks: 26,
     maxWeeks: 26,
@@ -41,15 +50,10 @@ export default async function DashboardPage({
     tz: DEFAULT_TZ,
   });
 
-  // ✅ Filter weeks for display based on view
   const horizonWeeksForView = fullSnapshot.horizonWeeks.slice(0, weeksInView);
-
-  // ✅ Recalculate KPIs for the selected view window
   const snapshot = recomputeSnapshot(fullSnapshot, horizonWeeksForView);
+  const workItems = await getWorkItemsForTeam(teamId);
 
-  const workItems = await getWorkItemsForTeam(MVP_TEAM_ID);
-
-  // ✅ Work items in current view and top 5 by hours
   const viewStartYmd = horizonWeeksForView[0]?.weekStartYmd ?? "";
   const viewEndYmd = horizonWeeksForView[horizonWeeksForView.length - 1]?.weekEndYmd ?? "";
   const workItemsInView = (() => {
@@ -65,7 +69,6 @@ export default async function DashboardPage({
     .sort((a, b) => b.estimated_hours - a.estimated_hours)
     .slice(0, 5);
 
-  // ✅ At-risk weeks only from the current view
   const atRiskWeeks = horizonWeeksForView
     .map((week) => {
       const utilizationPct = Math.round((week.committedHours / week.capacityHours) * 100);
@@ -73,7 +76,38 @@ export default async function DashboardPage({
     })
     .filter((w) => w.utilizationPct > 90);
 
-  // ✅ Hint shows only the view window (dd/mm/yyyy)
+  const thisWeek = horizonWeeksForView[0];
+  const freeHoursThisWeek = thisWeek
+    ? Math.max(0, Math.round(thisWeek.capacityHours - thisWeek.committedHours))
+    : 0;
+  const thisWeekUtilizationPct = thisWeek && thisWeek.capacityHours > 0
+    ? Math.round((thisWeek.committedHours / thisWeek.capacityHours) * 100)
+    : 0;
+
+  const BREATHING_ROOM_THRESHOLD_PCT = 70;
+  const nextBreathingRoomWeek = horizonWeeksForView.find(w => {
+    if (w.capacityHours <= 0) return false;
+    const pct = (w.committedHours / w.capacityHours) * 100;
+    return pct < BREATHING_ROOM_THRESHOLD_PCT;
+  }) ?? null;
+  const breathingRoomFreeHours = nextBreathingRoomWeek
+    ? Math.max(0, Math.round(
+        nextBreathingRoomWeek.capacityHours - nextBreathingRoomWeek.committedHours
+      ))
+    : 0;
+
+  const fourWeeksAheadYmd = horizonWeeksForView[
+    Math.min(3, horizonWeeksForView.length - 1)
+  ]?.weekEndYmd ?? '';
+  const upcomingDeadlines = workItems
+    .filter(item => {
+      if (!item.deadline) return false;
+      return item.deadline >= todayYmd && item.deadline <= fourWeeksAheadYmd;
+    })
+    .sort((a, b) =>
+      (a.deadline ?? '').localeCompare(b.deadline ?? '')
+    );
+
   const horizonHint =
     horizonWeeksForView.length > 0
       ? `${formatDateDdMmYyyy(horizonWeeksForView[0].weekStartYmd)} → ${formatDateDdMmYyyy(
@@ -103,9 +137,7 @@ export default async function DashboardPage({
         )}
       </header>
 
-      {/* KPIs — Risk first, context second. 4-col: primary 2, others 1 each. */}
       <section className="grid gap-4 md:grid-cols-4" aria-label="Overview">
-        {/* Tier 1: Primary — Max Utilization + Exposure (2 cols) */}
         <Card className="rounded-md md:col-span-2 flex flex-col justify-end">
           <CardContent className="py-0">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
@@ -126,7 +158,6 @@ export default async function DashboardPage({
           </CardContent>
         </Card>
 
-        {/* Tier 2: Committed (1 col) */}
         <Card className="rounded-md">
           <CardHeader className="pb-1">
             <CardTitleWithTooltip
@@ -142,24 +173,25 @@ export default async function DashboardPage({
           </CardContent>
         </Card>
 
-        {/* Tier 2: Weeks (1 col) */}
         <Card className="rounded-md">
           <CardHeader className="pb-1">
             <CardTitleWithTooltip
-              title="Weeks equivalence"
-              tooltip="Total committed expressed as weeks of team capacity."
+              title="Free this week"
+              tooltip="Available hours in the current week after committed work and buffer."
               className="text-sm font-medium text-muted-foreground"
             />
           </CardHeader>
           <CardContent className="space-y-0.5">
             <div className="text-2xl font-semibold tracking-tight">
-              {snapshot.weeksEquivalent}w
+              {freeHoursThisWeek}h
             </div>
+            <p className="text-xs text-muted-foreground tabular-nums">
+              {thisWeekUtilizationPct}% committed this week
+            </p>
           </CardContent>
         </Card>
       </section>
 
-      {/* Horizon + At-risk */}
       <section className="grid gap-4 md:grid-cols-3 pt-4">
         <div className="md:col-span-2">
           <Card className="rounded-md">
@@ -207,7 +239,7 @@ export default async function DashboardPage({
           </Card>
         </div>
 
-        <div>
+        <div className="space-y-4">
           <Card className="rounded-md">
             <CardHeader>
               <CardTitleWithTooltip
@@ -232,12 +264,89 @@ export default async function DashboardPage({
               )}
             </CardContent>
           </Card>
+
+          <Card className="rounded-md">
+            <CardHeader>
+              <CardTitleWithTooltip
+                title="Next breathing room"
+                tooltip="First week below 70% utilization in the current view."
+                as="h2"
+                className="text-sm font-medium text-muted-foreground"
+              />
+            </CardHeader>
+            <CardContent>
+              {nextBreathingRoomWeek ? (
+                <div className="space-y-1">
+                  <p className="text-xl font-medium">
+                    {nextBreathingRoomWeek.weekLabel}
+                  </p>
+                  <p className="text-xs text-muted-foreground tabular-nums">
+                    {breathingRoomFreeHours}h free
+                  </p>
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  No open weeks in this view
+                </p>
+              )}
+            </CardContent>
+          </Card>
         </div>
       </section>
 
+      {upcomingDeadlines.length > 0 && (
+        <section className="pt-4">
+          <Card className="rounded-md">
+            <CardHeader>
+              <h2 className="text-base font-semibold">Upcoming deadlines</h2>
+              <p className="text-sm text-muted-foreground">
+                Work due in the next 4 weeks
+              </p>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-0">
+                {upcomingDeadlines.map(item => {
+                  const days = daysUntil(item.deadline!, todayYmd);
+                  const isUrgent = days <= 7;
+                  const daysLabel =
+                    days === 0 ? 'Due today'
+                    : days === 1 ? 'Due tomorrow'
+                    : `In ${days} days`;
+                  return (
+                    <div
+                      key={item.id}
+                      className="flex items-center justify-between py-3 border-b last:border-0 gap-4"
+                    >
+                      <div className="min-w-0">
+                        <p className="font-medium text-sm truncate">
+                          {item.name}
+                        </p>
+                        <p className="text-xs text-muted-foreground tabular-nums mt-0.5">
+                          {item.estimated_hours}h estimated
+                        </p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className={`text-sm font-medium tabular-nums ${
+                          isUrgent ? 'text-rose-600' : 'text-foreground'
+                        }`}>
+                          {formatDateDdMmYyyy(item.deadline!)}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {daysLabel}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+        </section>
+      )}
+
       <section className="pt-4">
         <WorkItemsTable
-          teamId={MVP_TEAM_ID}
+          teamId={teamId}
           items={top5WorkItems}
           title="Committed work (top 5 by hours)"
           viewStartYmd={viewStartYmd}
@@ -252,4 +361,3 @@ export default async function DashboardPage({
     </div>
   );
 }
-

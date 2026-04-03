@@ -15,15 +15,10 @@ import {
   getWeeklyAvailableCapacity,
   getTotalCapacityForHorizonWeeks,
 } from "@/lib/teamCapacity";
+import { type Bucket, exposureBucketFromUtilization } from "@/lib/dashboardConstants";
 
-export type Bucket = "low" | "medium" | "high";
-
-/** Single source of truth: map utilization % to exposure bucket. */
-export function exposureBucketFromUtilization(pct: number): Bucket {
-  if (pct < 80) return "low";
-  if (pct <= 90) return "medium";
-  return "high";
-}
+export type { Bucket };
+export { exposureBucketFromUtilization };
 
 export type WeekSnapshot = {
   weekLabel: string;      // e.g. "16 Feb - 22 Feb"
@@ -112,7 +107,7 @@ export async function getDashboardSnapshotFromDb(
   teamId: string,
   options: HorizonOptions = {}
 ): Promise<DashboardSnapshot> {
-  const supabase = supabaseServer();
+  const supabase = await supabaseServer();
 
   const { data: teamRow, error: teamErr } = await supabase
     .from("teams")

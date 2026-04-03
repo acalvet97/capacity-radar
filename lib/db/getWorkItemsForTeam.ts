@@ -13,7 +13,7 @@ export type WorkItemRow = {
 
 export async function getWorkItemsForTeam(teamId: string): Promise<WorkItemRow[]> {
   noStore();
-  const supabase = supabaseServer();
+  const supabase = await supabaseServer();
 
   const { data, error } = await supabase
     .from("work_items")

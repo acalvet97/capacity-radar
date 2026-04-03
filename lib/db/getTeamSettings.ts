@@ -3,7 +3,7 @@ import { loadTeamCapacityHoursPerCycle } from "@/lib/loadTeamCapacity";
 import { cycleToWeekly } from "@/lib/capacityUnits";
 
 export async function getTeamBufferAndCapacity(teamId: string) {
-  const supabase = supabaseServer();
+  const supabase = await supabaseServer();
   const { data, error } = await supabase
     .from("teams")
     .select("buffer_hours_per_week")

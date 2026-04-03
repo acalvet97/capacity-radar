@@ -8,17 +8,18 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { HOURS_STEP, sanitizeHoursInput } from "@/lib/hours";
-import { MVP_TEAM_ID } from "@/lib/mvpTeam";
 import { updateReservedCapacityAction } from "@/app/actions/team";
 import { toast } from "sonner";
 
 type Props = {
+  teamId: string;
   initialEnabled: boolean;
   initialHoursPerWeek: number;
   weeklyCapacity: number;
 };
 
 export function ReservedCapacitySection({
+  teamId,
   initialEnabled,
   initialHoursPerWeek,
   weeklyCapacity,
@@ -54,7 +55,7 @@ export function ReservedCapacitySection({
 
     startToggleTransition(async () => {
       const result = await updateReservedCapacityAction(
-        MVP_TEAM_ID,
+        teamId,
         checked,
         checked && lastSavedHoursRef.current > 0 ? lastSavedHoursRef.current : 0
       );
@@ -88,7 +89,7 @@ export function ReservedCapacitySection({
     }
 
     startHoursTransition(async () => {
-      const result = await updateReservedCapacityAction(MVP_TEAM_ID, true, sanitized);
+      const result = await updateReservedCapacityAction(teamId, true, sanitized);
       if (result.ok) {
         lastSavedHoursRef.current = sanitized;
         toast.success("Reserved capacity hours updated.");
@@ -100,6 +101,9 @@ export function ReservedCapacitySection({
   }
 
   const maxHoursRounded = Math.round(weeklyCapacity * 2) / 2;
+
+  // suppress unused variable warning
+  void currentHours;
 
   return (
     <Card className="rounded-md max-w-2xl">

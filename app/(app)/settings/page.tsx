@@ -1,6 +1,6 @@
-import { MVP_TEAM_ID } from "@/lib/mvpTeam";
 import { getTeamBufferAndCapacity } from "@/lib/db/getTeamSettings";
 import { getTeamMembers } from "@/lib/db/getTeamMembers";
+import { getTeamIdForUser } from "@/lib/db/getTeamIdForUser";
 import { TeamCapacitySection } from "./TeamCapacitySection";
 import { ReservedCapacitySection } from "./ReservedCapacitySection";
 import { PlanningModelSection } from "./PlanningModelSection";
@@ -9,9 +9,11 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export default async function SettingsPage() {
+  const teamId = await getTeamIdForUser();
+
   const [members, { bufferHoursPerWeek, weeklyCapacity }] = await Promise.all([
-    getTeamMembers(MVP_TEAM_ID),
-    getTeamBufferAndCapacity(MVP_TEAM_ID),
+    getTeamMembers(teamId),
+    getTeamBufferAndCapacity(teamId),
   ]);
 
   const reservedEnabled = bufferHoursPerWeek > 0;
@@ -24,8 +26,9 @@ export default async function SettingsPage() {
       </header>
 
       <section className="space-y-8">
-        <TeamCapacitySection initialMembers={members} />
+        <TeamCapacitySection teamId={teamId} initialMembers={members} />
         <ReservedCapacitySection
+          teamId={teamId}
           initialEnabled={reservedEnabled}
           initialHoursPerWeek={reservedHours}
           weeklyCapacity={weeklyCapacity}

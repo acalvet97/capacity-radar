@@ -2,7 +2,7 @@
 import { supabaseServer } from "@/lib/supabaseServer";
 
 export async function loadTeamCapacityHoursPerCycle(teamId: string) {
-  const supabase = supabaseServer();
+  const supabase = await supabaseServer();
 
   const { data, error } = await supabase
     .from("team_members")

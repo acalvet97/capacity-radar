@@ -1,5 +1,8 @@
 import type { AllocationMode, OverCapacityScenario } from "@/lib/evaluateEngine";
 
+/** Delimiter used in the two-part stream protocol. */
+export const STREAM_DELIMITER = "\n\n__KLYRA_STRUCTURED__\n";
+
 /** Intent from the chat model (PRD 2b). */
 export type ChatIntent = "evaluate" | "query" | "ambiguous";
 
@@ -31,6 +34,8 @@ export type CommitCardData = {
 export type EvaluateChatMessage = {
   role: "user" | "assistant";
   content: string;
+  /** True while the streaming response is still arriving. */
+  isStreaming?: boolean;
   intent?: ChatIntent;
   resultCard?: ResultCardData;
   scenarioCards?: OverCapacityScenario[];
