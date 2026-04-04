@@ -25,7 +25,7 @@ export function CommittedWorkHeader() {
   const [startDate, setStartDate] = React.useState("");
   const [deadline, setDeadline] = React.useState("");
   const [estimatedHours, setEstimatedHours] = React.useState("");
-  const [allocationMode, setAllocationMode] = React.useState<"fill_capacity" | "even">("fill_capacity");
+  const [allocationMode, setAllocationMode] = React.useState<"fill_capacity" | "even">("even");
   const [error, setError] = React.useState<string | null>(null);
   const [isPending, startTransition] = React.useTransition();
 
@@ -36,7 +36,7 @@ export function CommittedWorkHeader() {
     setStartDate("");
     setDeadline("");
     setEstimatedHours("");
-    setAllocationMode("fill_capacity");
+    setAllocationMode("even");
   }
 
   function handleSubmit(e: React.FormEvent) {
@@ -171,23 +171,28 @@ export function CommittedWorkHeader() {
                 {(
                   [
                     {
-                      value: "fill_capacity",
-                      label: "Fill any time gap available",
+                      value: "even",
+                      label: "Evenly distributed",
+                      disabled: false,
                     },
                     {
-                      value: "even",
-                      label: "Equivalent hours per week",
+                      value: "fill_capacity",
+                      label: "Fill any time gap available",
+                      disabled: true,
                     },
                   ] as const
-                ).map(({ value, label }) => {
+                ).map(({ value, label, disabled }) => {
                   const selected = allocationMode === value;
                   return (
                     <button
                       key={value}
                       type="button"
-                      onClick={() => setAllocationMode(value)}
+                      disabled={disabled}
+                      onClick={() => !disabled && setAllocationMode(value)}
                       className={`flex items-center gap-3 rounded-md border px-4 py-3 text-sm transition-colors text-left ${
-                        selected
+                        disabled
+                          ? "border-input opacity-50 cursor-not-allowed"
+                          : selected
                           ? "border-foreground"
                           : "border-input hover:border-muted-foreground"
                       }`}
@@ -201,7 +206,12 @@ export function CommittedWorkHeader() {
                       >
                         {selected && <Check className="h-3 w-3" strokeWidth={3} />}
                       </span>
-                      {label}
+                      <span className="flex-1">{label}</span>
+                      {disabled && (
+                        <span className="ml-auto text-[10px] font-medium tracking-wide uppercase text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                          Coming soon
+                        </span>
+                      )}
                     </button>
                   );
                 })}

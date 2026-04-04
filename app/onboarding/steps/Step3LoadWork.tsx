@@ -3,6 +3,12 @@
 import * as React from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupTextarea,
+} from "@/components/ui/input-group";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Sparkles, FileSpreadsheet, PenLine, Download, FolderOpen, ArrowRight, ArrowLeft } from "lucide-react";
@@ -201,31 +207,38 @@ export function Step3LoadWork({ teamId: _teamId }: Props) {
           </p>
         </div>
 
-        <form onSubmit={handleAiSubmit} className="space-y-4">
-          <Textarea
-            value={aiText}
-            onChange={(e) => setAiText(e.target.value)}
-            placeholder={`Tell us what your team is currently working on. Don't worry about format — just describe it naturally.\n\ne.g. We're redesigning a client's e-commerce site, around 60 hours of work, started last week and due by end of April. Also have a logo project, roughly 15 hours, needs to be done by the 20th…`}
-            className="min-h-[200px] text-sm resize-y"
-            disabled={aiLoading}
-          />
-
-          <div className="flex items-center gap-3">
-            <Button type="submit" disabled={aiLoading || !aiText.trim()} className="rounded-md">
-              {aiLoading ? "Analysing your work…" : "Parse my projects"}
-              {!aiLoading && <ArrowRight className="size-4" />}
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              className="rounded-md text-muted-foreground"
-              onClick={() => setView("picker")}
+        <form onSubmit={handleAiSubmit}>
+          <InputGroup className="rounded-xl bg-background">
+            <InputGroupTextarea
+              value={aiText}
+              onChange={(e) => setAiText(e.target.value)}
+              placeholder={`Tell us what your team is currently working on. Don't worry about format — just describe it naturally.\n\ne.g. We're redesigning a client's e-commerce site, around 60 hours of work, started last week and due by end of April. Also have a logo project, roughly 15 hours, needs to be done by the 20th…`}
+              className="min-h-[200px] text-sm resize-y"
               disabled={aiLoading}
-            >
-              <ArrowLeft className="size-4" />
-              Go back
-            </Button>
-          </div>
+            />
+            <InputGroupAddon align="block-end" className="border-t justify-between px-3 py-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="rounded-md text-muted-foreground"
+                onClick={() => setView("picker")}
+                disabled={aiLoading}
+              >
+                <ArrowLeft className="size-4" />
+                Go back
+              </Button>
+              <InputGroupButton
+                type="submit"
+                size="sm"
+                variant={aiText.trim() ? "default" : "ghost"}
+                disabled={aiLoading || !aiText.trim()}
+              >
+                {aiLoading ? "Analysing…" : "Parse my projects"}
+                {!aiLoading && <ArrowRight className="size-4" />}
+              </InputGroupButton>
+            </InputGroupAddon>
+          </InputGroup>
 
           {aiLoading && (
             <p className="text-sm text-muted-foreground animate-pulse">

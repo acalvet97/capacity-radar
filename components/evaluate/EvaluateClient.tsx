@@ -10,6 +10,12 @@ import { cn } from "@/lib/utils";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupTextarea,
+} from "@/components/ui/input-group";
 import { WeekUtilizationBar } from "@/components/dashboard/WeekUtilizationBar";
 
 import type { DashboardSnapshot } from "@/lib/dashboardEngine";
@@ -892,26 +898,28 @@ export function EvaluateClient({
         </div>
 
         <form onSubmit={sendChat} className="w-full max-w-3xl">
-          <div className="relative">
-            <textarea
+          <InputGroup className="rounded-xl bg-background items-end py-1 pr-1">
+            <InputGroupTextarea
               value={chatInput}
               onChange={(e) => setChatInput(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="New project? Team question? Just ask..."
               rows={3}
               disabled={isChatLoading}
-              className="w-full resize-none rounded-xl border border-input bg-muted px-4 py-3 pr-16 text-sm leading-normal shadow-sm outline-none focus-visible:border-ring focus-visible:bg-background focus-visible:ring-ring/50 focus-visible:ring-[3px] disabled:opacity-50"
+              className="disabled:opacity-50"
             />
-            <Button
-              type="submit"
-              size="icon-lg"
-              disabled={isChatLoading || !chatInput.trim()}
-              className="absolute bottom-3 right-2 h-10 w-10 rounded-lg"
-              aria-label="Send message"
-            >
-              <ArrowUp className="size-4" />
-            </Button>
-          </div>
+            <InputGroupAddon align="inline-end">
+              <InputGroupButton
+                type="submit"
+                size="icon-sm"
+                variant={chatInput.trim() ? "default" : "ghost"}
+                disabled={isChatLoading || !chatInput.trim()}
+                aria-label="Send message"
+              >
+                <ArrowUp className="size-4" />
+              </InputGroupButton>
+            </InputGroupAddon>
+          </InputGroup>
         </form>
       </div>
 
@@ -1016,26 +1024,30 @@ export function EvaluateClient({
         {/* Input bar */}
         <div className="shrink-0 w-full py-4">
           <div className="mx-auto max-w-3xl px-4">
-            <form onSubmit={sendChat} className="flex gap-2 items-end">
-              <textarea
-                ref={chatInputRef}
-                value={chatInput}
-                onChange={(e) => setChatInput(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder="New project? Team question? Just ask..."
-                disabled={isChatLoading}
-                rows={1}
-                className="flex-1 resize-none rounded-xl border border-input bg-muted px-4 py-3 text-sm leading-normal max-h-40 shadow-sm outline-none focus-visible:border-ring focus-visible:bg-background focus-visible:ring-ring/50 focus-visible:ring-[3px] disabled:opacity-50 overflow-y-auto"
-              />
-              <Button
-                type="submit"
-                size="icon-lg"
-                className="h-12 w-12 shrink-0 rounded-xl"
-                disabled={isChatLoading || !chatInput.trim()}
-                aria-label="Send message"
-              >
-                <ArrowUp className="size-5" />
-              </Button>
+            <form onSubmit={sendChat}>
+              <InputGroup className="rounded-xl bg-background items-end py-1 pr-1">
+                <InputGroupTextarea
+                  ref={chatInputRef}
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder="New project? Team question? Just ask..."
+                  disabled={isChatLoading}
+                  rows={1}
+                  className="max-h-40 py-3 overflow-y-auto disabled:opacity-50"
+                />
+                <InputGroupAddon align="inline-end">
+                  <InputGroupButton
+                    type="submit"
+                    size="icon-sm"
+                    variant={chatInput.trim() ? "default" : "ghost"}
+                    disabled={isChatLoading || !chatInput.trim()}
+                    aria-label="Send message"
+                  >
+                    <ArrowUp className="size-4" />
+                  </InputGroupButton>
+                </InputGroupAddon>
+              </InputGroup>
             </form>
             {chatError && (
               <p className="mt-2 text-xs text-rose-600">{chatError}</p>
