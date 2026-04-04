@@ -54,7 +54,7 @@ export async function register(formData: FormData) {
     });
   if (teamError) throw new Error(teamError.message);
 
-  redirect('/evaluate');
+  redirect('/onboarding');
 }
 
 export async function login(formData: FormData) {

@@ -21,6 +21,7 @@ import {
 } from "@/lib/dashboardConstants";
 import { DEFAULT_TZ, todayYmdInTz, formatDateDdMmYyyy } from "@/lib/dates";
 import { normalizeViewSearchParam, weeksForHorizonView } from "@/lib/horizonView";
+import { checkAndCreateStalenessNotification } from "@/lib/notifications";
 
 function daysUntil(deadlineYmd: string, todayYmd: string): number {
   const deadline = new Date(deadlineYmd + 'T00:00:00Z');
@@ -41,6 +42,9 @@ export default async function DashboardPage({
   const weeksInView = weeksForHorizonView(view, todayYmd);
 
   const teamId = await getTeamIdForUser();
+
+  // Fire-and-forget: check for stale work items and create notification if needed
+  checkAndCreateStalenessNotification(teamId).catch(() => {});
 
   const fullSnapshot = await getDashboardSnapshotFromDb(teamId, {
     startYmd: todayYmd,

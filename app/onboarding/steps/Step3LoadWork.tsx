@@ -1,0 +1,321 @@
+"use client";
+
+import * as React from "react";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import { Sparkles, FileSpreadsheet, PenLine, Download, FolderOpen, ArrowRight, ArrowLeft } from "lucide-react";
+import {
+  Item,
+  ItemMedia,
+  ItemContent,
+  ItemTitle,
+  ItemDescription,
+} from "@/components/ui/item";
+import { ReviewTable, type ReviewItem } from "./ReviewTable";
+
+type Method = "picker" | "ai" | "csv" | "review-ai" | "review-csv";
+
+type Props = {
+  teamId: string;
+};
+
+export function Step3LoadWork({ teamId: _teamId }: Props) {
+  const router = useRouter();
+  const [view, setView] = React.useState<Method>("picker");
+  const [reviewItems, setReviewItems] = React.useState<ReviewItem[]>([]);
+  const [importSource, setImportSource] = React.useState<"ai" | "csv">("ai");
+
+  // AI import state
+  const [aiText, setAiText] = React.useState("");
+  const [aiLoading, setAiLoading] = React.useState(false);
+
+  // CSV import state
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const [csvLoading, setCsvLoading] = React.useState(false);
+
+  // "Skip" — manual entry (mark onboarding complete immediately)
+  const [skipPending, startSkipTransition] = React.useTransition();
+
+  function handleSkip() {
+    startSkipTransition(async () => {
+      try {
+        const res = await fetch("/api/work-items/bulk-create", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ items: [], import_source: "manual" }),
+        });
+        if (!res.ok) throw new Error("Failed to complete onboarding");
+        router.push("/dashboard");
+        router.refresh();
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Something went wrong");
+      }
+    });
+  }
+
+  async function handleAiSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!aiText.trim()) return;
+    setAiLoading(true);
+    try {
+      const res = await fetch("/api/onboarding/ai-import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: aiText }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "AI import failed");
+      setReviewItems(
+        (data as ReviewItem[]).map((item, i) => ({ ...item, id: `ai-${i}` }))
+      );
+      setImportSource("ai");
+      setView("review-ai");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to parse text");
+    } finally {
+      setAiLoading(false);
+    }
+  }
+
+  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const allowed = [".csv", ".xlsx", ".xls"];
+    const ext = "." + file.name.split(".").pop()?.toLowerCase();
+    if (!allowed.includes(ext)) {
+      toast.error("Please upload a .csv, .xlsx, or .xls file");
+      return;
+    }
+
+    setCsvLoading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const res = await fetch("/api/onboarding/csv-import", {
+        method: "POST",
+        body: formData,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "CSV import failed");
+      if (!Array.isArray(data) || data.length === 0) {
+        toast.error("No valid rows found in the file");
+        return;
+      }
+      setReviewItems(
+        (data as ReviewItem[]).map((item, i) => ({ ...item, id: `csv-${i}` }))
+      );
+      setImportSource("csv");
+      setView("review-csv");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to parse file");
+    } finally {
+      setCsvLoading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
+  // ── Method picker ──────────────────────────────────────────────────────────
+  if (view === "picker") {
+    return (
+      <div className="space-y-8">
+        <div className="space-y-1">
+          <h1 className="text-2xl font-semibold tracking-tight">Load your work</h1>
+          <p className="text-muted-foreground">
+            Get your team&apos;s current projects into Klyra. Choose how you&apos;d like to add them.
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          <Item
+            asChild
+            variant="outline"
+            className="w-full cursor-pointer hover:bg-muted/40 hover:border-foreground/30 transition-colors"
+          >
+            <button onClick={() => setView("ai")}>
+              <ItemMedia variant="icon">
+                <Sparkles />
+              </ItemMedia>
+              <ItemContent>
+                <ItemTitle>Describe your work</ItemTitle>
+                <ItemDescription>
+                  Tell us what your team is working on in plain language — AI will parse it.
+                </ItemDescription>
+              </ItemContent>
+            </button>
+          </Item>
+
+          <Item
+            asChild
+            variant="outline"
+            className="w-full cursor-pointer hover:bg-muted/40 hover:border-foreground/30 transition-colors"
+          >
+            <button onClick={() => setView("csv")}>
+              <ItemMedia variant="icon">
+                <FileSpreadsheet />
+              </ItemMedia>
+              <ItemContent>
+                <ItemTitle>Upload a file</ItemTitle>
+                <ItemDescription>
+                  Import projects from a CSV or Excel spreadsheet.
+                </ItemDescription>
+              </ItemContent>
+            </button>
+          </Item>
+
+          <Item
+            asChild
+            variant="outline"
+            className="w-full cursor-pointer hover:bg-muted/40 hover:border-foreground/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <button onClick={handleSkip} disabled={skipPending}>
+              <ItemMedia variant="icon">
+                <PenLine />
+              </ItemMedia>
+              <ItemContent>
+                <ItemTitle>
+                  {skipPending ? "Setting up…" : "I'll add it manually"}
+                </ItemTitle>
+                <ItemDescription>
+                  Skip to the dashboard and add projects there.
+                </ItemDescription>
+              </ItemContent>
+            </button>
+          </Item>
+        </div>
+      </div>
+    );
+  }
+
+  // ── AI text input ──────────────────────────────────────────────────────────
+  if (view === "ai") {
+    return (
+      <div className="space-y-6">
+        <div className="space-y-1">
+          <h1 className="text-2xl font-semibold tracking-tight">Describe your work</h1>
+          <p className="text-muted-foreground">
+            Write naturally — don&apos;t worry about format.
+          </p>
+        </div>
+
+        <form onSubmit={handleAiSubmit} className="space-y-4">
+          <Textarea
+            value={aiText}
+            onChange={(e) => setAiText(e.target.value)}
+            placeholder={`Tell us what your team is currently working on. Don't worry about format — just describe it naturally.\n\ne.g. We're redesigning a client's e-commerce site, around 60 hours of work, started last week and due by end of April. Also have a logo project, roughly 15 hours, needs to be done by the 20th…`}
+            className="min-h-[200px] text-sm resize-y"
+            disabled={aiLoading}
+          />
+
+          <div className="flex items-center gap-3">
+            <Button type="submit" disabled={aiLoading || !aiText.trim()} className="rounded-md">
+              {aiLoading ? "Analysing your work…" : "Parse my projects"}
+              {!aiLoading && <ArrowRight className="size-4" />}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              className="rounded-md text-muted-foreground"
+              onClick={() => setView("picker")}
+              disabled={aiLoading}
+            >
+              <ArrowLeft className="size-4" />
+              Go back
+            </Button>
+          </div>
+
+          {aiLoading && (
+            <p className="text-sm text-muted-foreground animate-pulse">
+              Analysing your work…
+            </p>
+          )}
+        </form>
+      </div>
+    );
+  }
+
+  // ── CSV upload ─────────────────────────────────────────────────────────────
+  if (view === "csv") {
+    return (
+      <div className="space-y-6">
+        <div className="space-y-1">
+          <h1 className="text-2xl font-semibold tracking-tight">Upload a file</h1>
+          <p className="text-muted-foreground">
+            Upload a CSV or Excel file with your projects.
+          </p>
+        </div>
+
+        <div className="rounded-md border border-dashed p-6 space-y-4">
+          <div className="space-y-2">
+            <p className="text-sm font-medium">Need a template?</p>
+            <a
+              href="/api/onboarding/csv-template"
+              download="klyra-import-template.xlsx"
+              className="inline-flex items-center gap-1.5 text-sm underline underline-offset-2 text-foreground hover:text-foreground/80"
+            >
+              <Download className="size-3.5" />
+              Download template (.xlsx)
+            </a>
+            <ul className="text-xs text-muted-foreground list-disc list-inside space-y-0.5 mt-2">
+              <li>Dates: YYYY-MM-DD or DD/MM/YYYY</li>
+              <li>Hours: a number (e.g. 40, not "40h")</li>
+              <li>Leave cells blank if unknown</li>
+            </ul>
+          </div>
+
+          <div className="space-y-2">
+            <p className="text-sm font-medium">Upload your file</p>
+            <label
+              htmlFor="csv-upload"
+              className={`flex flex-col items-center justify-center gap-2 rounded-md border-2 border-dashed border-border p-8 cursor-pointer hover:border-foreground/30 hover:bg-muted/30 transition-colors ${
+                csvLoading ? "opacity-50 pointer-events-none" : ""
+              }`}
+            >
+              <FolderOpen className="size-6 text-muted-foreground" />
+              <span className="text-sm text-muted-foreground">
+                {csvLoading ? "Parsing file…" : "Click to browse or drag and drop"}
+              </span>
+              <span className="text-xs text-muted-foreground">.csv, .xlsx, .xls accepted</span>
+            </label>
+            <input
+              id="csv-upload"
+              ref={fileInputRef}
+              type="file"
+              accept=".csv,.xlsx,.xls"
+              className="sr-only"
+              onChange={handleFileChange}
+              disabled={csvLoading}
+            />
+          </div>
+        </div>
+
+        <Button
+          type="button"
+          variant="ghost"
+          className="rounded-md text-muted-foreground"
+          onClick={() => setView("picker")}
+          disabled={csvLoading}
+        >
+          <ArrowLeft className="size-4" />
+          Go back
+        </Button>
+      </div>
+    );
+  }
+
+  // ── Review table (shared for AI and CSV) ───────────────────────────────────
+  if (view === "review-ai" || view === "review-csv") {
+    return (
+      <ReviewTable
+        items={reviewItems}
+        importSource={importSource}
+        onBack={() => setView(importSource === "ai" ? "ai" : "csv")}
+      />
+    );
+  }
+
+  return null;
+}

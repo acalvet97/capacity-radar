@@ -4,7 +4,8 @@ import * as React from "react";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ArrowUp } from "lucide-react";
+import { ArrowUp, ArrowRight, Check, X } from "lucide-react";
+import { DatePicker } from "@/components/ui/date-picker";
 import { cn } from "@/lib/utils";
 
 import { Button } from "@/components/ui/button";
@@ -32,12 +33,6 @@ import type {
   ChatIntent,
 } from "@/lib/evaluateChatTypes";
 import { STREAM_DELIMITER } from "@/lib/evaluateChatTypes";
-
-const INITIAL_GREETING: EvaluateChatMessage = {
-  role: "assistant",
-  content:
-    "Hey — describe work you want to evaluate, or ask me anything about your team's capacity. For example: 'Do we have room for a 40h project in May?' or 'When is the team least loaded?'",
-};
 
 function toApiMessages(messages: EvaluateChatMessage[]) {
   return messages.map(({ role, content }) => ({ role, content }));
@@ -159,8 +154,9 @@ function ResultCard({
       style={{ opacity }}
     >
       <div className="flex items-center justify-between">
-        <span className={fits ? "text-green-600 font-semibold" : "text-rose-600 font-semibold"}>
-          {fits ? "✓ Fits within capacity" : "✗ Exceeds capacity"}
+        <span className={`flex items-center gap-1.5 font-semibold ${fits ? "text-green-600" : "text-rose-600"}`}>
+          {fits ? <Check className="size-4 shrink-0" /> : <X className="size-4 shrink-0" />}
+          {fits ? "Fits within capacity" : "Exceeds capacity"}
         </span>
         <span className="text-2xl font-bold tabular-nums">{data.peakUtilizationPct}%</span>
       </div>
@@ -177,8 +173,8 @@ function ResultCard({
           <div key={w.weekLabel} className="space-y-1">
             <div className="flex justify-between text-xs">
               <span>{w.weekLabel}</span>
-              <span className="tabular-nums text-muted-foreground">
-                {w.beforePct}% → {w.afterPct}%
+              <span className="tabular-nums text-muted-foreground flex items-center gap-1">
+                {w.beforePct}% <ArrowRight className="size-3 shrink-0" /> {w.afterPct}%
                 {w.afterPct > 100 && (
                   <span className="text-rose-600"> +{w.afterPct - 100}%</span>
                 )}
@@ -248,7 +244,7 @@ function CommitCard({
   if (showCommittedSuccess) {
     return (
       <div className="rounded-lg border bg-background p-4 flex items-center gap-2 text-green-600">
-        <span className="text-lg">✓</span>
+        <Check className="size-5 shrink-0" />
         <span className="text-sm font-medium">Committed</span>
       </div>
     );
@@ -273,18 +269,19 @@ function CommitCard({
       </div>
 
       <div className="flex items-center gap-2 text-sm">
-        <Input
-          type="date"
+        <DatePicker
           value={data.startYmd}
-          onChange={(e) => onChange({ startYmd: e.target.value })}
-          className="h-8 text-sm w-36"
+          onChange={(v) => onChange({ startYmd: v })}
+          placeholder="Start date"
+          className="h-8 text-xs flex-1"
         />
-        <span className="text-muted-foreground">→</span>
-        <Input
-          type="date"
+        <ArrowRight className="size-4 shrink-0 text-muted-foreground" />
+        <DatePicker
           value={data.deadlineYmd ?? ""}
-          onChange={(e) => onChange({ deadlineYmd: e.target.value || undefined })}
-          className="h-8 text-sm w-36"
+          onChange={(v) => onChange({ deadlineYmd: v || undefined })}
+          placeholder="No deadline"
+          clearable
+          className="h-8 text-xs flex-1"
         />
       </div>
 
@@ -332,7 +329,7 @@ export function EvaluateClient({
 
   const defaultStart = snapshot.horizonWeeks[0]?.weekStartYmd ?? todayYmd;
 
-  const [messages, setMessages] = useState<EvaluateChatMessage[]>([INITIAL_GREETING]);
+  const [messages, setMessages] = useState<EvaluateChatMessage[]>([]);
   const [chatInput, setChatInput] = useState("");
 
   const [name, setName] = useState("New work item");
@@ -889,7 +886,7 @@ export function EvaluateClient({
           </p>
         </div>
 
-        <form onSubmit={sendChat} className="w-full max-w-xl">
+        <form onSubmit={sendChat} className="w-full max-w-3xl">
           <div className="relative">
             <textarea
               value={chatInput}
@@ -898,15 +895,16 @@ export function EvaluateClient({
               placeholder="New project? Team question? Just ask..."
               rows={3}
               disabled={isChatLoading}
-              className="w-full resize-none rounded-xl border bg-background px-4 py-3 pr-12 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+              className="w-full resize-none rounded-xl border border-input bg-muted px-4 py-3 pr-16 text-sm leading-normal shadow-sm outline-none focus-visible:border-ring focus-visible:bg-background focus-visible:ring-ring/50 focus-visible:ring-[3px] disabled:opacity-50"
             />
             <Button
               type="submit"
-              size="icon"
+              size="icon-lg"
               disabled={isChatLoading || !chatInput.trim()}
-              className="absolute bottom-2.5 right-2.5 h-7 w-7 rounded-lg"
+              className="absolute bottom-3 right-2 h-10 w-10 rounded-lg"
+              aria-label="Send message"
             >
-              <ArrowUp className="h-4 w-4" />
+              <ArrowUp className="size-4" />
             </Button>
           </div>
         </form>

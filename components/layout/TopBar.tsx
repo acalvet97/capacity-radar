@@ -1,6 +1,8 @@
-import Link from "next/link";
-import { User } from "lucide-react";
 import { supabaseServer } from "@/lib/supabaseServer";
+import { getTeamIdForUser } from "@/lib/db/getTeamIdForUser";
+import { getTeamName } from "@/lib/db/getTeamName";
+import { NotificationBell } from "./NotificationBell";
+import { TopBarBreadcrumbs } from "./TopBarBreadcrumbs";
 
 /**
  * Height matches the sidebar header (logo row): p-5 + h-7 + p-5 = 4.25rem
@@ -11,25 +13,32 @@ export async function TopBar() {
   const supabase = await supabaseServer();
   const { data: { user } } = await supabase.auth.getUser();
 
-  const displayName =
-    user?.user_metadata?.display_name ||
-    user?.email?.split('@')[0] ||
-    'Account';
+  let initialNotifications: Parameters<typeof NotificationBell>[0]["initialNotifications"] = [];
+  if (user) {
+    const { data } = await supabase
+      .from("notifications")
+      .select("id, type, payload, created_at, read_at")
+      .eq("user_id", user.id)
+      .is("read_at", null)
+      .order("created_at", { ascending: false });
+    initialNotifications = (data ?? []) as typeof initialNotifications;
+  }
+
+  let teamName = "Team";
+  try {
+    const teamId = await getTeamIdForUser();
+    teamName = await getTeamName(teamId);
+  } catch {
+    // fall back to default
+  }
 
   return (
     <header
-      className="sticky top-0 z-40 flex shrink-0 items-center justify-end border-b border-border bg-background"
+      className="sticky top-0 z-40 flex shrink-0 items-center justify-between border-b border-border bg-background px-8"
       style={{ height: TOP_BAR_HEIGHT }}
     >
-      <Link
-        href="/account"
-        className="flex items-center gap-2 px-8 text-sm font-medium text-foreground hover:text-foreground/80 transition-colors"
-      >
-        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-muted">
-          <User className="size-3.5 text-muted-foreground" />
-        </span>
-        <span>{displayName}</span>
-      </Link>
+      <TopBarBreadcrumbs teamName={teamName} />
+      <NotificationBell initialNotifications={initialNotifications} />
     </header>
   );
 }

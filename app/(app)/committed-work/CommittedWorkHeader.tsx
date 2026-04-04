@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { DatePicker } from "@/components/ui/date-picker";
 import {
   Sheet,
   SheetContent,
@@ -96,83 +97,78 @@ export function CommittedWorkHeader() {
 
       <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
         <SheetContent
-          side="right"
-          className="flex h-full flex-col gap-0 overflow-hidden sm:max-w-md"
+          side="bottom"
+          className="left-auto right-8 w-full max-w-md rounded-t-xl p-0 gap-0"
         >
-          <SheetHeader className="shrink-0 p-5">
+          <SheetHeader className="px-6 pt-6 pb-2">
             <SheetTitle>Add existing commitment</SheetTitle>
           </SheetHeader>
-          <div className="min-h-0 flex-1 overflow-y-auto">
-            <form
-              id="add-commitment-form"
-              onSubmit={handleSubmit}
-              className="flex flex-col gap-4 px-5 py-5"
-            >
-              <div className="space-y-2">
-                <Label htmlFor="add-name">Name</Label>
-<Input
+
+          <form
+            id="add-commitment-form"
+            onSubmit={handleSubmit}
+            className="flex flex-col gap-4 px-6 py-4"
+          >
+            <div className="space-y-2">
+              <Label htmlFor="add-name">Name</Label>
+              <Input
                 id="add-name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Work item name"
                 autoComplete="off"
-                className="scroll-mt-4 scroll-mb-4"
               />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="add-start">Start date</Label>
-<Input
-                id="add-start"
-                type="date"
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="add-hours">Estimated hours</Label>
+              <Input
+                id="add-hours"
+                type="number"
+                min={0.5}
+                step={0.5}
+                inputMode="decimal"
+                value={estimatedHours}
+                onChange={(e) => setEstimatedHours(e.target.value)}
+                onBlur={() => {
+                  const sanitized = sanitizeHoursInput(estimatedHours);
+                  if (Number(estimatedHours) !== sanitized) {
+                    setEstimatedHours(String(sanitized));
+                  }
+                }}
+                placeholder="e.g. 40"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Start date</Label>
+              <DatePicker
                 value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="scroll-mt-4 scroll-mb-4"
+                onChange={setStartDate}
+                placeholder="Pick a start date"
               />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="add-deadline">Deadline (optional)</Label>
-<Input
-                id="add-deadline"
-                type="date"
+            </div>
+            <div className="space-y-2">
+              <Label>Deadline (optional)</Label>
+              <DatePicker
                 value={deadline}
-                onChange={(e) => setDeadline(e.target.value)}
-                className="scroll-mt-4 scroll-mb-4"
+                onChange={setDeadline}
+                placeholder="No deadline"
+                clearable
               />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="add-hours">Estimated hours</Label>
-                <Input
-                  id="add-hours"
-                  type="number"
-                  min={0.5}
-                  step={0.5}
-                  inputMode="decimal"
-                  value={estimatedHours}
-                  onChange={(e) => setEstimatedHours(e.target.value)}
-                  onBlur={() => {
-                    const sanitized = sanitizeHoursInput(estimatedHours);
-                    if (Number(estimatedHours) !== sanitized) {
-                      setEstimatedHours(String(sanitized));
-                    }
-                  }}
-                  placeholder="e.g. 40"
-                  className="scroll-mt-4 scroll-mb-4"
-                />
-              </div>
-              <div className="min-h-[1.25rem]" role="alert" aria-live="polite">
-                {error ? (
-                  <p className="text-sm text-destructive">{error}</p>
-                ) : null}
-              </div>
-            </form>
-          </div>
-          <SheetFooter className="shrink-0 border-t border-border px-5 py-5">
+            </div>
+            {error && (
+              <p className="text-sm text-destructive" role="alert">
+                {error}
+              </p>
+            )}
+          </form>
+
+          <SheetFooter className="px-6 pb-6 pt-2">
             <Button
               type="submit"
               form="add-commitment-form"
               disabled={isPending}
               size="lg"
-              className="py-3"
+              className="w-full"
             >
               {isPending ? "Adding…" : "Add commitment"}
             </Button>

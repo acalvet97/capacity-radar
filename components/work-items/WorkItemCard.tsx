@@ -4,6 +4,8 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import { deleteWorkItemAction, updateWorkItemAction } from "@/app/actions/workItems";
 import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/ui/date-picker";
+import { ArrowRight } from "lucide-react";
 import type { WorkItemRow } from "@/lib/db/getWorkItemsForTeam";
 import { formatDateDdMmYyyy } from "@/lib/dates";
 import { sanitizeHoursInput, formatHoursForDisplay } from "@/lib/hours";
@@ -106,7 +108,7 @@ export function WorkItemCard(props: { teamId: string; item: WorkItemRow }) {
               {item.start_date && item.deadline ? (
                 <>
                   {" "}
-                  · {formatDate(item.start_date)} → {formatDate(item.deadline)}
+                  · {formatDate(item.start_date)} <ArrowRight className="size-3 inline-block align-middle" /> {formatDate(item.deadline)}
                 </>
               ) : item.start_date ? (
                 <>
@@ -171,23 +173,26 @@ export function WorkItemCard(props: { teamId: string; item: WorkItemRow }) {
               />
             </label>
 
-            <label className="flex flex-col gap-1 text-xs">
+            <div className="flex flex-col gap-1 text-xs">
               <span className="text-muted-foreground">Start date</span>
-              <Input
-                type="date"
+              <DatePicker
                 value={draftStart}
-                onChange={(e) => setDraftStart(e.target.value)}
+                onChange={setDraftStart}
+                placeholder="Start date"
+                className="h-8 text-xs"
               />
-            </label>
+            </div>
 
-            <label className="flex flex-col gap-1 text-xs">
+            <div className="flex flex-col gap-1 text-xs">
               <span className="text-muted-foreground">Deadline (optional)</span>
-              <Input
-                type="date"
+              <DatePicker
                 value={draftDeadline}
-                onChange={(e) => setDraftDeadline(e.target.value)}
+                onChange={setDraftDeadline}
+                placeholder="No deadline"
+                clearable
+                className="h-8 text-xs"
               />
-            </label>
+            </div>
           </div>
 
           {errorMessage ? (

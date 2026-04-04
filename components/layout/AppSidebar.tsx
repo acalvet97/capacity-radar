@@ -1,9 +1,10 @@
 "use client";
 
-import { Bot, ClipboardList, LayoutDashboard, LogOut, Settings, User } from "lucide-react";
+import { Sparkle, ClipboardList, Gauge, Settings } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { NavUser, type NavUserData } from "@/components/nav-user";
 import {
   Sidebar,
   SidebarContent,
@@ -15,16 +16,15 @@ import {
   SidebarMenuItem,
   SidebarSeparator,
 } from "@/components/ui/sidebar";
-import { logout } from "@/app/actions/auth";
 
 const dataNavItems = [
-  { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+  { label: "Dashboard", href: "/dashboard", icon: Gauge },
   { label: "Workload", href: "/committed-work", icon: ClipboardList },
 ];
 
 const SIDEBAR_WIDTH = "16rem";
 
-export function AppSidebar() {
+export function AppSidebar({ user }: { user: NavUserData }) {
   const pathname = usePathname();
 
   function NavItem({ label, href, icon: Icon }: { label: string; href: string; icon: React.ElementType }) {
@@ -65,7 +65,7 @@ export function AppSidebar() {
           {/* Ask Klyra — primary action, sits alone at top */}
           <SidebarGroup className="pb-0">
             <SidebarMenu className="px-0">
-              <NavItem label="Ask Klyra" href="/evaluate" icon={Bot} />
+              <NavItem label="Ask Klyra" href="/evaluate" icon={Sparkle} />
             </SidebarMenu>
           </SidebarGroup>
 
@@ -89,26 +89,8 @@ export function AppSidebar() {
             </SidebarMenu>
           </SidebarGroup>
         </SidebarContent>
-        <SidebarFooter className="p-3 space-y-0.5">
-          <SidebarMenuButton
-            asChild
-            isActive={pathname === '/account'}
-            className="rounded-sm px-3 py-2"
-          >
-            <Link href="/account">
-              <User className="size-4 shrink-0" />
-              <span>Account</span>
-            </Link>
-          </SidebarMenuButton>
-          <form action={logout}>
-            <button
-              type="submit"
-              className="flex w-full items-center gap-2 rounded-sm px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-            >
-              <LogOut className="size-4 shrink-0" />
-              <span>Sign out</span>
-            </button>
-          </form>
+        <SidebarFooter className="p-2">
+          <NavUser user={user} />
         </SidebarFooter>
       </Sidebar>
     </div>
