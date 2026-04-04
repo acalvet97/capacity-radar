@@ -213,7 +213,7 @@ export function ReviewTable({ items: initialItems, importSource, onBack }: Props
         <Button onClick={handleConfirm} disabled={isPending} className="rounded-md">
           {isPending
             ? "Saving…"
-            : `Add ${rows.length} project${rows.length !== 1 ? "s" : ""} to Klyra`}
+            : `Add ${rows.length} project${rows.length !== 1 ? "s" : ""} to klira`}
           {!isPending && <ArrowRight className="size-4" />}
         </Button>
         <Button

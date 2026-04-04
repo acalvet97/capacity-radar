@@ -1,7 +1,7 @@
 import type { AllocationMode, OverCapacityScenario } from "@/lib/evaluateEngine";
 
 /** Delimiter used in the two-part stream protocol. */
-export const STREAM_DELIMITER = "\n\n__KLYRA_STRUCTURED__\n";
+export const STREAM_DELIMITER = "\n\n__klira_STRUCTURED__\n";
 
 /** Intent from the chat model (PRD 2b). */
 export type ChatIntent = "evaluate" | "query" | "ambiguous";

@@ -166,7 +166,7 @@ export function Step2TeamSetup({
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">Set up your team</h1>
         <p className="text-muted-foreground">
-          Add your team members and their weekly hours so Klyra can calculate capacity.
+          Add your team members and their weekly hours so klira can calculate capacity.
         </p>
       </div>
 
@@ -304,7 +304,7 @@ export function Step2TeamSetup({
       {/* No members warning */}
       {showNoMembersWarning && (
         <p className="text-sm text-amber-600 dark:text-amber-400">
-          You haven&apos;t added any team members yet. Klyra needs this to calculate capacity.
+          You haven&apos;t added any team members yet. klira needs this to calculate capacity.
         </p>
       )}
 

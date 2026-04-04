@@ -312,6 +312,11 @@ function CommitCard({
   );
 }
 
+const INITIAL_GREETING: EvaluateChatMessage = {
+  role: "assistant",
+  content: "Hi! I can help you evaluate new work or check your team's capacity. What would you like to do?",
+};
+
 export function EvaluateClient({
   snapshot,
   todayYmd,
@@ -1003,7 +1008,7 @@ export function EvaluateClient({
         {isChatLoading && !isStreamingActive && (
           <div className="w-full">
             <div className="mx-auto max-w-3xl px-4 py-2 text-xs text-muted-foreground animate-pulse">
-              Klyra is thinking...
+              klira is thinking...
             </div>
           </div>
         )}

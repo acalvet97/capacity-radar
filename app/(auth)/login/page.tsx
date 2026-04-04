@@ -3,6 +3,7 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { login } from '@/app/actions/auth';
+import { isRedirectError } from 'next/dist/client/components/redirect-error';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -19,7 +20,8 @@ export default function LoginPage() {
     startTransition(async () => {
       try {
         await login(formData);
-      } catch {
+      } catch (err) {
+        if (isRedirectError(err)) throw err;
         setError('Invalid email or password.');
       }
     });

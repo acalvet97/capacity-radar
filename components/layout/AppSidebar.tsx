@@ -53,8 +53,8 @@ export function AppSidebar({ user }: { user: NavUserData }) {
         <SidebarHeader className="p-5">
           <Link href="/dashboard" className="flex items-center">
             <Image
-              src="/klyra-logo.svg"
-              alt="Klyra"
+              src="/klira-logo.svg"
+              alt="klira"
               width={120}
               height={40}
               className="h-7 w-auto"
@@ -62,10 +62,10 @@ export function AppSidebar({ user }: { user: NavUserData }) {
           </Link>
         </SidebarHeader>
         <SidebarContent className="pt-4">
-          {/* Ask Klyra — primary action, sits alone at top */}
+          {/* Ask klira — primary action, sits alone at top */}
           <SidebarGroup className="pb-0">
             <SidebarMenu className="px-0">
-              <NavItem label="Ask Klyra" href="/evaluate" icon={Sparkle} />
+              <NavItem label="Ask klira" href="/evaluate" icon={Sparkle} />
             </SidebarMenu>
           </SidebarGroup>
 

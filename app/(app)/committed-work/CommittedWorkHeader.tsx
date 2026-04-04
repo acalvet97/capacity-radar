@@ -3,6 +3,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -24,6 +25,7 @@ export function CommittedWorkHeader() {
   const [startDate, setStartDate] = React.useState("");
   const [deadline, setDeadline] = React.useState("");
   const [estimatedHours, setEstimatedHours] = React.useState("");
+  const [allocationMode, setAllocationMode] = React.useState<"fill_capacity" | "even">("fill_capacity");
   const [error, setError] = React.useState<string | null>(null);
   const [isPending, startTransition] = React.useTransition();
 
@@ -34,6 +36,7 @@ export function CommittedWorkHeader() {
     setStartDate("");
     setDeadline("");
     setEstimatedHours("");
+    setAllocationMode("fill_capacity");
   }
 
   function handleSubmit(e: React.FormEvent) {
@@ -59,6 +62,7 @@ export function CommittedWorkHeader() {
           totalHours: hours,
           startYmd: startDate.trim(),
           deadlineYmd: deadline.trim() || undefined,
+          allocationMode,
         });
         setSheetOpen(false);
         router.refresh();
@@ -98,29 +102,33 @@ export function CommittedWorkHeader() {
       <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
         <SheetContent
           side="bottom"
-          className="left-auto right-8 w-full max-w-md rounded-t-xl p-0 gap-0"
+          className="left-auto right-8 w-full max-w-lg rounded-t-xl p-16 gap-0"
         >
-          <SheetHeader className="px-6 pt-6 pb-2">
-            <SheetTitle>Add existing commitment</SheetTitle>
+          <SheetHeader className="p-0 pb-12">
+            <SheetTitle className="text-2xl font-medium">Add existing commitment</SheetTitle>
+            <p className="text-sm text-muted-foreground">
+              All work items for your team. Sort by closest deadline or by
+              amount of hours.
+            </p>
           </SheetHeader>
 
           <form
             id="add-commitment-form"
             onSubmit={handleSubmit}
-            className="flex flex-col gap-4 px-6 py-4"
+            className="flex flex-col gap-4"
           >
             <div className="space-y-2">
-              <Label htmlFor="add-name">Name</Label>
+              <Label htmlFor="add-name">Commitment title</Label>
               <Input
                 id="add-name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="Work item name"
+                placeholder="Add a title"
                 autoComplete="off"
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="add-hours">Estimated hours</Label>
+              <Label htmlFor="add-hours">Expected total hours</Label>
               <Input
                 id="add-hours"
                 type="number"
@@ -135,25 +143,69 @@ export function CommittedWorkHeader() {
                     setEstimatedHours(String(sanitized));
                   }
                 }}
-                placeholder="e.g. 40"
+                placeholder="E.g.: 40"
               />
             </div>
-            <div className="space-y-2">
-              <Label>Start date</Label>
-              <DatePicker
-                value={startDate}
-                onChange={setStartDate}
-                placeholder="Pick a start date"
-              />
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label>Start date</Label>
+                <DatePicker
+                  value={startDate}
+                  onChange={setStartDate}
+                  placeholder="dd/mm/yyyy"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Deadline</Label>
+                <DatePicker
+                  value={deadline}
+                  onChange={setDeadline}
+                  placeholder="dd/mm/yyyy"
+                  clearable
+                />
+              </div>
             </div>
             <div className="space-y-2">
-              <Label>Deadline (optional)</Label>
-              <DatePicker
-                value={deadline}
-                onChange={setDeadline}
-                placeholder="No deadline"
-                clearable
-              />
+              <Label>Allocation mode</Label>
+              <div className="flex flex-col gap-2">
+                {(
+                  [
+                    {
+                      value: "fill_capacity",
+                      label: "Fill any time gap available",
+                    },
+                    {
+                      value: "even",
+                      label: "Equivalent hours per week",
+                    },
+                  ] as const
+                ).map(({ value, label }) => {
+                  const selected = allocationMode === value;
+                  return (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setAllocationMode(value)}
+                      className={`flex items-center gap-3 rounded-md border px-4 py-3 text-sm transition-colors text-left ${
+                        selected
+                          ? "border-foreground"
+                          : "border-input hover:border-muted-foreground"
+                      }`}
+                    >
+                      <span
+                        className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border transition-colors ${
+                          selected
+                            ? "border-foreground bg-foreground text-background"
+                            : "border-input"
+                        }`}
+                      >
+                        {selected && <Check className="h-3 w-3" strokeWidth={3} />}
+                      </span>
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
             {error && (
               <p className="text-sm text-destructive" role="alert">
@@ -162,7 +214,7 @@ export function CommittedWorkHeader() {
             )}
           </form>
 
-          <SheetFooter className="px-6 pb-6 pt-2">
+          <SheetFooter className="flex flex-col gap-3 pt-12 px-0 pb-0">
             <Button
               type="submit"
               form="add-commitment-form"
@@ -170,8 +222,14 @@ export function CommittedWorkHeader() {
               size="lg"
               className="w-full"
             >
-              {isPending ? "Adding…" : "Add commitment"}
+              {isPending ? "Adding…" : "Fast commit"}
             </Button>
+            <Link
+              href="/evaluate"
+              className="text-center text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground transition-colors"
+            >
+              Evaluate work before committing
+            </Link>
           </SheetFooter>
         </SheetContent>
       </Sheet>

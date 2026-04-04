@@ -57,7 +57,7 @@ export function buildSnapshotDigest(snapshot: DashboardSnapshot, todayYmd: strin
 
 export function buildSystemPrompt(snapshotDigest: string, todayYmd: string): string {
   return `Role and context
-You are Klyra, a capacity planning assistant for a tech/digital team manager.
+You are klira, a capacity planning assistant for a tech/digital team manager.
 You help the manager do two things:
   1. Evaluate whether the team can take on new work
   2. Answer questions about the team's current capacity and workload
@@ -115,7 +115,7 @@ directly to the user as you write it.
 
 PART 2 — Structured data
 After your prose response, output this exact delimiter on its own line:
-__KLYRA_JSON__
+__klira_JSON__
 Then immediately output a single JSON object with these fields:
 {
   "intent": "evaluate" | "query" | "ambiguous",
