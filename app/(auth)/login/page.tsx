@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import Link from 'next/link';
+import { Eye, EyeOff } from 'lucide-react';
 import { login } from '@/app/actions/auth';
 import { isRedirectError } from 'next/dist/client/components/redirect-error';
 import { Button } from '@/components/ui/button';
@@ -12,6 +13,7 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card';
 export default function LoginPage() {
   const [error, setError] = React.useState<string | null>(null);
   const [isPending, startTransition] = React.useTransition();
+  const [showPassword, setShowPassword] = React.useState(false);
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -49,17 +51,37 @@ export default function LoginPage() {
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="password">Password</Label>
-            <Input
-              id="password"
-              name="password"
-              type="password"
-              placeholder="Your password"
-              required
-              disabled={isPending}
-            />
+            <div className="flex items-center justify-between">
+              <Label htmlFor="password">Password</Label>
+              <Link
+                href="/forgot-password"
+                className="text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground transition-colors"
+              >
+                Forgot password?
+              </Link>
+            </div>
+            <div className="relative">
+              <Input
+                id="password"
+                name="password"
+                type={showPassword ? 'text' : 'password'}
+                placeholder="Your password"
+                required
+                disabled={isPending}
+                className="pr-9"
+              />
+              <button
+                type="button"
+                tabIndex={-1}
+                onClick={() => setShowPassword((v) => !v)}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+              >
+                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
           </div>
-          <Button type="submit" className="w-full rounded-md" disabled={isPending}>
+          <Button type="submit" className="w-full" disabled={isPending}>
             {isPending ? 'Signing in…' : 'Sign in'}
           </Button>
           {error && (

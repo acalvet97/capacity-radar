@@ -38,7 +38,7 @@ export function Step1WorkspaceName({ initialName, onContinue }: Props) {
   return (
     <div className="space-y-8">
       <div className="space-y-1">
-        <h1 className="text-2xl font-semibold tracking-tight">Welcome to klira</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Welcome to Klyra</h1>
         <p className="text-muted-foreground">
           Let&apos;s get your workspace set up. This takes about 2 minutes.
         </p>
@@ -61,7 +61,7 @@ export function Step1WorkspaceName({ initialName, onContinue }: Props) {
           />
         </div>
 
-        <Button type="submit" disabled={isPending || !name.trim()} className="rounded-md">
+        <Button type="submit" disabled={isPending || !name.trim()} >
           {isPending ? "Saving…" : "Continue"}
           {!isPending && <ArrowRight className="size-4" />}
         </Button>

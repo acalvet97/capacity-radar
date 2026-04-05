@@ -42,13 +42,6 @@ function normaliseDate(raw: unknown): string | null {
     return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
   }
 
-  // MM/DD/YYYY (less common but handle gracefully)
-  const mmddy = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-  if (mmddy) {
-    const [, m, d, y] = mmddy;
-    return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
-  }
-
   return null;
 }
 

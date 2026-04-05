@@ -6,7 +6,7 @@ export async function GET() {
 
   // Instructions sheet
   const instructions = [
-    ["klira Import Template — Instructions"],
+    ["Klyra Import Template — Instructions"],
     [""],
     ["Fill in the 'Import' sheet with your projects."],
     ["Column format:"],
@@ -44,7 +44,7 @@ export async function GET() {
     status: 200,
     headers: {
       "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      "Content-Disposition": 'attachment; filename="klira-import-template.xlsx"',
+      "Content-Disposition": 'attachment; filename="Klyra-import-template.xlsx"',
       "Cache-Control": "public, max-age=86400",
     },
   });

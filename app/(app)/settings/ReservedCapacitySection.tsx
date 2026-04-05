@@ -33,11 +33,6 @@ export function ReservedCapacitySection({
   const [isHoursPending, startHoursTransition] = React.useTransition();
   const lastSavedHoursRef = React.useRef(initialEnabled ? initialHoursPerWeek : 0);
 
-  const currentHours = React.useMemo(() => {
-    if (!enabled) return 0;
-    return sanitizeHoursInput(hoursInput);
-  }, [enabled, hoursInput]);
-
   const hasHoursChanges =
     enabled &&
     Number.isFinite(sanitizeHoursInput(hoursInput)) &&
@@ -102,9 +97,6 @@ export function ReservedCapacitySection({
 
   const maxHoursRounded = Math.round(weeklyCapacity * 2) / 2;
 
-  // suppress unused variable warning
-  void currentHours;
-
   return (
     <Card className="rounded-md max-w-2xl">
       <CardHeader className="flex flex-row items-start justify-between gap-4">
@@ -146,7 +138,6 @@ export function ReservedCapacitySection({
             </div>
             <Button
               type="submit"
-              className="rounded-md"
               disabled={!hasHoursChanges || isHoursPending}
             >
               {isHoursPending ? "Saving…" : "Save changes"}

@@ -201,7 +201,6 @@ export function ReviewTable({ items: initialItems, importSource, onBack }: Props
         type="button"
         variant="outline"
         size="sm"
-        className="rounded-md"
         onClick={addRow}
         disabled={isPending}
       >
@@ -210,10 +209,10 @@ export function ReviewTable({ items: initialItems, importSource, onBack }: Props
       </Button>
 
       <div className="flex items-center gap-3 pt-2">
-        <Button onClick={handleConfirm} disabled={isPending} className="rounded-md">
+        <Button onClick={handleConfirm} disabled={isPending}>
           {isPending
             ? "Saving…"
-            : `Add ${rows.length} project${rows.length !== 1 ? "s" : ""} to klira`}
+            : `Add ${rows.length} project${rows.length !== 1 ? "s" : ""} to Klyra`}
           {!isPending && <ArrowRight className="size-4" />}
         </Button>
         <Button

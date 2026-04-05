@@ -3,7 +3,6 @@
 import { revalidatePath } from "next/cache";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
-import { redirect } from "next/navigation";
 
 export type ActionResult = { ok: true } | { ok: false; message: string };
 
@@ -26,16 +25,3 @@ export async function updateWorkspaceNameAction(name: string): Promise<ActionRes
   return { ok: true };
 }
 
-export async function markOnboardingCompleteAction(): Promise<void> {
-  const supabase = await supabaseServer();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return;
-
-  await supabaseAdmin()
-    .from("teams")
-    .update({ onboarding_completed: true })
-    .eq("owner_user_id", user.id);
-
-  revalidatePath("/dashboard");
-  redirect("/dashboard");
-}

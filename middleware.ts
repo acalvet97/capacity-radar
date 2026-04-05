@@ -28,9 +28,16 @@ export async function middleware(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
 
   const isAuthRoute = request.nextUrl.pathname.startsWith('/login')
-    || request.nextUrl.pathname.startsWith('/register');
+    || request.nextUrl.pathname.startsWith('/register')
+    || request.nextUrl.pathname.startsWith('/verify-email')
+    || request.nextUrl.pathname.startsWith('/forgot-password')
+    || request.nextUrl.pathname.startsWith('/reset-password');
 
-  if (!user && !isAuthRoute) {
+  // /auth/* routes (e.g. /auth/callback) must always be reachable — they handle
+  // token exchange before a session exists and must not be redirected.
+  const isPublicRoute = request.nextUrl.pathname.startsWith('/auth/');
+
+  if (!user && !isAuthRoute && !isPublicRoute) {
     return NextResponse.redirect(new URL('/login', request.url));
   }
 

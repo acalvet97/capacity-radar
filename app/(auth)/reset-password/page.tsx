@@ -1,44 +1,43 @@
 'use client';
 
 import * as React from 'react';
-import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Eye, EyeOff } from 'lucide-react';
-import { register } from '@/app/actions/auth';
+import { supabaseBrowser } from '@/lib/supabaseBrowser';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { PASSWORD_RULES, PasswordRulesChecklist } from '@/components/auth/PasswordRulesChecklist';
 
-function normaliseRegisterError(msg: string): string {
-  const lower = msg.toLowerCase();
-  if (
-    lower.includes('already registered') ||
-    lower.includes('already exists') ||
-    lower.includes('already been registered') ||
-    lower.includes('email address is already')
-  ) {
-    return 'An account with this email already exists.';
-  }
-  return msg;
-}
-
-export default function RegisterPage() {
-  const [error, setError] = React.useState<string | null>(null);
-  const [isPending, startTransition] = React.useTransition();
-
+export default function ResetPasswordPage() {
+  const router = useRouter();
   const [password, setPassword] = React.useState('');
   const [confirmPassword, setConfirmPassword] = React.useState('');
   const [passwordBlurred, setPasswordBlurred] = React.useState(false);
   const [showPassword, setShowPassword] = React.useState(false);
   const [showConfirm, setShowConfirm] = React.useState(false);
+  const [isPending, setIsPending] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+  const [sessionReady, setSessionReady] = React.useState(false);
 
   const allRulesMet = PASSWORD_RULES.every((r) => r.test(password));
   const passwordTouched = password.length > 0;
   const confirmTouched = confirmPassword.length > 0;
   const passwordsMatch = password === confirmPassword;
 
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  // Wait for Supabase to exchange the recovery token from the URL hash
+  React.useEffect(() => {
+    const supabase = supabaseBrowser();
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        setSessionReady(true);
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
 
@@ -53,45 +52,45 @@ export default function RegisterPage() {
       return;
     }
 
-    const formData = new FormData(e.currentTarget);
+    setIsPending(true);
+    const supabase = supabaseBrowser();
+    const { error: updateError } = await supabase.auth.updateUser({ password });
+    setIsPending(false);
 
-    startTransition(async () => {
-      try {
-        await register(formData);
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Something went wrong.';
-        setError(normaliseRegisterError(msg));
-      }
-    });
+    if (updateError) {
+      setError(updateError.message);
+      return;
+    }
+
+    router.push('/login');
+  }
+
+  if (!sessionReady) {
+    return (
+      <Card className="rounded-md">
+        <CardContent className="pt-6">
+          <p className="py-6 text-center text-sm text-muted-foreground">
+            Validating your reset link…
+          </p>
+        </CardContent>
+      </Card>
+    );
   }
 
   return (
     <Card className="rounded-md">
       <CardHeader className="pb-4">
-        <h2 className="text-lg font-semibold">Create your account</h2>
+        <h2 className="text-lg font-semibold">Set a new password</h2>
         <p className="text-sm text-muted-foreground">
-          Get started — your workspace setup comes right after.
+          Choose a strong password for your account.
         </p>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
 
-          {/* Email */}
+          {/* New password */}
           <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
-            <Input
-              id="email"
-              name="email"
-              type="email"
-              placeholder="you@company.com"
-              required
-              disabled={isPending}
-            />
-          </div>
-
-          {/* Password */}
-          <div className="space-y-2">
-            <Label htmlFor="password">Password</Label>
+            <Label htmlFor="password">New password</Label>
             <div className="relative">
               <Input
                 id="password"
@@ -124,7 +123,7 @@ export default function RegisterPage() {
 
           {/* Confirm password */}
           <div className="space-y-2">
-            <Label htmlFor="confirmPassword">Confirm password</Label>
+            <Label htmlFor="confirmPassword">Confirm new password</Label>
             <div className="relative">
               <Input
                 id="confirmPassword"
@@ -143,7 +142,6 @@ export default function RegisterPage() {
                     : 'pr-16'
                 }
               />
-              {/* Match icon */}
               {confirmTouched && (
                 <span className="pointer-events-none absolute right-9 top-1/2 -translate-y-1/2">
                   {passwordsMatch ? (
@@ -153,7 +151,6 @@ export default function RegisterPage() {
                   )}
                 </span>
               )}
-              {/* Show/hide toggle */}
               <button
                 type="button"
                 tabIndex={-1}
@@ -177,19 +174,13 @@ export default function RegisterPage() {
             className="w-full rounded-md"
             disabled={isPending || (confirmTouched && !passwordsMatch)}
           >
-            {isPending ? 'Creating account…' : 'Create account'}
+            {isPending ? 'Saving…' : 'Set new password'}
           </Button>
 
           {error && (
             <p className="text-sm text-rose-600 text-center">{error}</p>
           )}
         </form>
-        <p className="mt-4 text-center text-sm text-muted-foreground">
-          Already have an account?{' '}
-          <Link href="/login" className="text-foreground underline underline-offset-4">
-            Sign in
-          </Link>
-        </p>
       </CardContent>
     </Card>
   );

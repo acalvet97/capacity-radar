@@ -22,7 +22,7 @@ const MODEL = process.env.ANTHROPIC_MODEL ?? "claude-sonnet-4-20250514";
 // This is NOT the same as STREAM_DELIMITER — see section 4.5 of the PRD.
 // PROSE_DELIMITER: written by the AI in its response (never reaches the client)
 // STREAM_DELIMITER: appended by the route after processing (the only delimiter the client sees)
-const PROSE_DELIMITER = "__klira_JSON__";
+const PROSE_DELIMITER = "__Klyra_JSON__";
 
 const VALID_INTENTS = new Set<ChatIntent>(["evaluate", "query", "ambiguous"]);
 

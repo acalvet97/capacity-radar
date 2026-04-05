@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { HOURS_STEP, sanitizeHoursInputAllowZero } from "@/lib/hours";
 import { cycleToWeekly, weeklyToCycle } from "@/lib/capacityUnits";
+import { type MemberRow, toMemberRows } from "@/lib/teamMemberRows";
 import {
   updateTeamMembersHoursAction,
   createTeamMemberAction,
@@ -16,22 +17,6 @@ import {
 import { toast } from "sonner";
 import { Plus, Trash2 } from "lucide-react";
 import type { TeamMemberRow } from "@/lib/db/getTeamMembers";
-
-type MemberRow = {
-  id: string;
-  name: string | null;
-  hoursInput: string;
-  isNew?: boolean;
-};
-
-function toMemberRows(rows: TeamMemberRow[]): MemberRow[] {
-  return rows.map((m) => ({
-    id: m.id,
-    name: m.name,
-    hoursInput: String(cycleToWeekly(m.hours_per_cycle)),
-    isNew: false,
-  }));
-}
 
 export function TeamCapacitySection({
   teamId,
@@ -230,7 +215,6 @@ export function TeamCapacitySection({
               type="button"
               variant="outline"
               size="sm"
-              className="rounded-md"
               onClick={handleAddMember}
               disabled={isPending}
             >
@@ -244,7 +228,6 @@ export function TeamCapacitySection({
           </div>
           <Button
             type="submit"
-            className="rounded-md"
             disabled={!hasChanges || isPending}
           >
             {isPending ? "Saving…" : "Save changes"}

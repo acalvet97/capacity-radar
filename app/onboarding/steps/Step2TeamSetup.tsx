@@ -8,7 +8,8 @@ import { Label } from "@/components/ui/label";
 import { Trash2, Plus, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
 import { HOURS_STEP, sanitizeHoursInputAllowZero, sanitizeHoursInput } from "@/lib/hours";
-import { cycleToWeekly, weeklyToCycle } from "@/lib/capacityUnits";
+import { weeklyToCycle } from "@/lib/capacityUnits";
+import { type MemberRow, toMemberRows } from "@/lib/teamMemberRows";
 import {
   updateTeamMembersHoursAction,
   createTeamMemberAction,
@@ -17,22 +18,6 @@ import {
   type TeamMemberUpdate,
 } from "@/app/actions/team";
 import type { TeamMemberRow } from "@/lib/db/getTeamMembers";
-
-type MemberRow = {
-  id: string;
-  name: string | null;
-  hoursInput: string;
-  isNew?: boolean;
-};
-
-function toMemberRows(rows: TeamMemberRow[]): MemberRow[] {
-  return rows.map((m) => ({
-    id: m.id,
-    name: m.name,
-    hoursInput: String(cycleToWeekly(m.hours_per_cycle)),
-    isNew: false,
-  }));
-}
 
 type Props = {
   teamId: string;
@@ -166,7 +151,7 @@ export function Step2TeamSetup({
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">Set up your team</h1>
         <p className="text-muted-foreground">
-          Add your team members and their weekly hours so klira can calculate capacity.
+          Add your team members and their weekly hours so Klyra can calculate capacity.
         </p>
       </div>
 
@@ -304,7 +289,7 @@ export function Step2TeamSetup({
       {/* No members warning */}
       {showNoMembersWarning && (
         <p className="text-sm text-amber-600 dark:text-amber-400">
-          You haven&apos;t added any team members yet. klira needs this to calculate capacity.
+          You haven&apos;t added any team members yet. Klyra needs this to calculate capacity.
         </p>
       )}
 

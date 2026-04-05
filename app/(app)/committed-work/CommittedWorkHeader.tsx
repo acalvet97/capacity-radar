@@ -107,8 +107,7 @@ export function CommittedWorkHeader() {
           <SheetHeader className="p-0 pb-12">
             <SheetTitle className="text-2xl font-medium">Add existing commitment</SheetTitle>
             <p className="text-sm text-muted-foreground">
-              All work items for your team. Sort by closest deadline or by
-              amount of hours.
+              Log work your team is already committed to. No capacity analysis — just a straight addition to the pipeline.
             </p>
           </SheetHeader>
 

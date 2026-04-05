@@ -1,13 +1,4 @@
 import type { DashboardSnapshot } from "@/lib/dashboardEngine";
-import {
-  type NewWorkInput,
-  evaluateNewWork,
-  buildOverCapacityScenarios,
-  fitsWithinCapacity,
-} from "@/lib/evaluateEngine";
-import type { ChatIntent, ExtractedWorkParams } from "@/lib/evaluateChatTypes";
-import { isValidYmd } from "@/lib/dates";
-import { sanitizeHoursInput } from "@/lib/hours";
 
 export function buildSnapshotDigest(snapshot: DashboardSnapshot, todayYmd: string): string {
   const weeks = snapshot.horizonWeeks;
@@ -57,7 +48,7 @@ export function buildSnapshotDigest(snapshot: DashboardSnapshot, todayYmd: strin
 
 export function buildSystemPrompt(snapshotDigest: string, todayYmd: string): string {
   return `Role and context
-You are klira, a capacity planning assistant for a tech/digital team manager.
+You are Klyra, a capacity planning assistant for a tech/digital team manager.
 You help the manager do two things:
   1. Evaluate whether the team can take on new work
   2. Answer questions about the team's current capacity and workload
@@ -115,7 +106,7 @@ directly to the user as you write it.
 
 PART 2 — Structured data
 After your prose response, output this exact delimiter on its own line:
-__klira_JSON__
+__Klyra_JSON__
 Then immediately output a single JSON object with these fields:
 {
   "intent": "evaluate" | "query" | "ambiguous",
@@ -145,109 +136,3 @@ Do not use markdown formatting in message text.
 Use plain numbers and plain sentences.`;
 }
 
-export type ParsedModelJson = {
-  message: string;
-  intent: ChatIntent;
-  extractedParams: ExtractedWorkParams | null;
-  readyToEvaluate: boolean;
-};
-
-export function parseModelJsonResponse(raw: string): ParsedModelJson {
-  try {
-    const clean = raw.replace(/```json/gi, "").replace(/```/g, "").trim();
-    const start = clean.indexOf("{");
-    const end = clean.lastIndexOf("}");
-    if (start === -1 || end <= start) {
-      throw new Error("No JSON object in response");
-    }
-    const jsonSlice = clean.slice(start, end + 1);
-    const parsed = JSON.parse(jsonSlice) as {
-      message?: unknown;
-      intent?: unknown;
-      extractedParams?: unknown;
-      readyToEvaluate?: unknown;
-    };
-
-    const message = typeof parsed.message === "string" ? parsed.message : "";
-    let intent: ChatIntent = "evaluate";
-    if (parsed.intent === "query" || parsed.intent === "ambiguous") {
-      intent = parsed.intent;
-    } else if (parsed.intent === "evaluate") {
-      intent = "evaluate";
-    }
-
-    const extractedParams =
-      parsed.extractedParams !== null &&
-      parsed.extractedParams !== undefined &&
-      typeof parsed.extractedParams === "object"
-        ? (parsed.extractedParams as ExtractedWorkParams)
-        : null;
-
-    return {
-      message,
-      intent,
-      extractedParams,
-      readyToEvaluate: Boolean(parsed.readyToEvaluate),
-    };
-  } catch {
-    return {
-      message: "I'm having trouble processing that. Could you try again?",
-      intent: "ambiguous",
-      extractedParams: null,
-      readyToEvaluate: false,
-    };
-  }
-}
-
-export function buildNewWorkInputFromExtracted(
-  p: ExtractedWorkParams,
-  defaults: { todayYmd: string }
-): NewWorkInput | null {
-  const totalHours =
-    typeof p.totalHours === "number" && Number.isFinite(p.totalHours)
-      ? sanitizeHoursInput(p.totalHours)
-      : 0;
-  if (totalHours <= 0) return null;
-
-  const startYmd = (p.startYmd ?? defaults.todayYmd).trim();
-  if (!isValidYmd(startYmd)) return null;
-
-  const deadlineYmd = p.deadlineYmd?.trim()
-    ? p.deadlineYmd.trim()
-    : undefined;
-  if (deadlineYmd && !isValidYmd(deadlineYmd)) return null;
-  if (deadlineYmd && deadlineYmd < startYmd) return null;
-
-  const name = (p.name ?? "New work item").trim() || "New work item";
-  const allocationMode = p.allocationMode ?? "fill_capacity";
-
-  return {
-    name,
-    totalHours,
-    startYmd,
-    deadlineYmd,
-    allocationMode,
-  };
-}
-
-export function summarizeEngineForClient(
-  snapshot: DashboardSnapshot,
-  input: NewWorkInput
-) {
-  const evaluation = evaluateNewWork(snapshot, input);
-  const scenarios = fitsWithinCapacity(evaluation)
-    ? []
-    : buildOverCapacityScenarios(snapshot, input);
-
-  return {
-    evaluation,
-    digest: {
-      peakUtilizationPct: evaluation.after.maxUtilizationPct,
-      overallUtilizationPct: evaluation.after.overallUtilizationPct,
-      fitsWithinCapacity: fitsWithinCapacity(evaluation),
-      weeksInSpan: evaluation.applied.weeksCount,
-      scenarioTitles: scenarios.map((s) => s.title),
-    },
-    scenarios,
-  };
-}

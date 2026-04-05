@@ -1016,7 +1016,7 @@ export function EvaluateClient({
         {isChatLoading && !isStreamingActive && (
           <div className="w-full">
             <div className="mx-auto max-w-3xl px-4 py-2 text-xs text-muted-foreground animate-pulse">
-              klira is thinking...
+              Klyra is thinking...
             </div>
           </div>
         )}

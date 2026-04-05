@@ -1,11 +1,13 @@
 'use client';
 
 import { useState, useTransition } from 'react';
+import { Eye, EyeOff, CheckCircle2, XCircle } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { PASSWORD_RULES, PasswordRulesChecklist } from '@/components/auth/PasswordRulesChecklist';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -134,7 +136,7 @@ function ProfileSection({ displayName, email }: { displayName: string; email: st
         </div>
       </div>
       <div className="flex items-center gap-3">
-        <Button onClick={handleSave} disabled={isPending} className="rounded-md">
+        <Button onClick={handleSave} disabled={isPending} >
           {isPending ? 'Saving…' : 'Save profile'}
         </Button>
         <InlineFeedback error={error} success={success} />
@@ -151,12 +153,23 @@ function SecuritySection() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
+  const [showCurrent, setShowCurrent] = useState(false);
+  const [showNew, setShowNew] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [newPasswordBlurred, setNewPasswordBlurred] = useState(false);
+
+  const allRulesMet = PASSWORD_RULES.every((r) => r.test(newPassword));
+  const newPasswordTouched = newPassword.length > 0;
+  const confirmTouched = confirmPassword.length > 0;
+  const passwordsMatch = newPassword === confirmPassword;
+
   function handleSave() {
-    if (newPassword.length < 8) {
-      setError('New password must be at least 8 characters.');
+    if (!allRulesMet) {
+      setNewPasswordBlurred(true);
+      setError('Please meet all password requirements.');
       return;
     }
-    if (newPassword !== confirmPassword) {
+    if (!passwordsMatch) {
       setError('New password and confirmation do not match.');
       return;
     }
@@ -173,6 +186,7 @@ function SecuritySection() {
         setCurrentPassword('');
         setNewPassword('');
         setConfirmPassword('');
+        setNewPasswordBlurred(false);
         setTimeout(() => setSuccess(false), 3000);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Something went wrong');
@@ -183,42 +197,110 @@ function SecuritySection() {
   return (
     <SectionCard title="Security" description="Change your account password.">
       <div className="space-y-4 max-w-sm">
+        {/* Current password */}
         <div className="space-y-1.5">
           <Label htmlFor="current-password">Current password</Label>
-          <Input
-            id="current-password"
-            type="password"
-            value={currentPassword}
-            onChange={(e) => setCurrentPassword(e.target.value)}
-            disabled={isPending}
-            autoComplete="current-password"
-          />
+          <div className="relative">
+            <Input
+              id="current-password"
+              type={showCurrent ? 'text' : 'password'}
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              disabled={isPending}
+              autoComplete="current-password"
+              className="pr-9"
+            />
+            <button
+              type="button"
+              tabIndex={-1}
+              onClick={() => setShowCurrent((v) => !v)}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+              aria-label={showCurrent ? 'Hide password' : 'Show password'}
+            >
+              {showCurrent ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          </div>
         </div>
+
+        {/* New password */}
         <div className="space-y-1.5">
           <Label htmlFor="new-password">New password</Label>
-          <Input
-            id="new-password"
-            type="password"
-            value={newPassword}
-            onChange={(e) => setNewPassword(e.target.value)}
-            disabled={isPending}
-            autoComplete="new-password"
-          />
+          <div className="relative">
+            <Input
+              id="new-password"
+              type={showNew ? 'text' : 'password'}
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              onBlur={() => { if (newPasswordTouched) setNewPasswordBlurred(true); }}
+              disabled={isPending}
+              autoComplete="new-password"
+              className="pr-9"
+              placeholder="Min. 8 characters"
+            />
+            <button
+              type="button"
+              tabIndex={-1}
+              onClick={() => setShowNew((v) => !v)}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+              aria-label={showNew ? 'Hide password' : 'Show password'}
+            >
+              {showNew ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          </div>
+          {newPasswordTouched && (
+            <PasswordRulesChecklist password={newPassword} passwordBlurred={newPasswordBlurred} />
+          )}
         </div>
+
+        {/* Confirm new password */}
         <div className="space-y-1.5">
           <Label htmlFor="confirm-password">Confirm new password</Label>
-          <Input
-            id="confirm-password"
-            type="password"
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            disabled={isPending}
-            autoComplete="new-password"
-          />
+          <div className="relative">
+            <Input
+              id="confirm-password"
+              type={showConfirm ? 'text' : 'password'}
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              disabled={isPending}
+              autoComplete="new-password"
+              placeholder="Re-enter your new password"
+              className={
+                confirmTouched
+                  ? passwordsMatch
+                    ? 'border-emerald-500 pr-16 focus-visible:ring-emerald-500/30'
+                    : 'border-rose-500 pr-16 focus-visible:ring-rose-500/30'
+                  : 'pr-16'
+              }
+            />
+            {confirmTouched && (
+              <span className="pointer-events-none absolute right-9 top-1/2 -translate-y-1/2">
+                {passwordsMatch ? (
+                  <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                ) : (
+                  <XCircle className="h-4 w-4 text-rose-500" />
+                )}
+              </span>
+            )}
+            <button
+              type="button"
+              tabIndex={-1}
+              onClick={() => setShowConfirm((v) => !v)}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+              aria-label={showConfirm ? 'Hide password' : 'Show password'}
+            >
+              {showConfirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          </div>
+          {confirmTouched && !passwordsMatch && (
+            <p className="text-xs text-rose-500">Passwords do not match.</p>
+          )}
+          {confirmTouched && passwordsMatch && (
+            <p className="text-xs text-emerald-600">Passwords match.</p>
+          )}
         </div>
       </div>
       <div className="flex items-center gap-3">
-        <Button onClick={handleSave} disabled={isPending} className="rounded-md">
+        <Button onClick={handleSave} disabled={isPending}>
           {isPending ? 'Updating…' : 'Update password'}
         </Button>
         {success && (
@@ -273,7 +355,7 @@ function TeamSection({ teamName, teamId }: { teamName: string; teamId: string })
         </div>
       </div>
       <div className="flex items-center gap-3">
-        <Button onClick={handleSave} disabled={isPending} className="rounded-md">
+        <Button onClick={handleSave} disabled={isPending} >
           {isPending ? 'Saving…' : 'Save team name'}
         </Button>
         <InlineFeedback error={error} success={success} />
@@ -346,7 +428,7 @@ function DangerZoneSection({ email }: { email: string }) {
         </p>
         <AlertDialog open={open} onOpenChange={setOpen}>
           <AlertDialogTrigger asChild>
-            <Button variant="outline" className="shrink-0 border-destructive/50 text-destructive hover:bg-destructive hover:text-destructive-foreground">
+            <Button variant="outline" className="shrink-0 border-destructive/50 text-destructive hover:bg-destructive hover:text-white dark:hover:text-white">
               Delete account
             </Button>
           </AlertDialogTrigger>

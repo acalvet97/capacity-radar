@@ -131,7 +131,7 @@ export function Step3LoadWork({ teamId: _teamId }: Props) {
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">Load your work</h1>
           <p className="text-muted-foreground">
-            Get your team&apos;s current projects into klira. Choose how you&apos;d like to add them.
+            Get your team&apos;s current projects into Klyra. Choose how you&apos;d like to add them.
           </p>
         </div>
 
@@ -266,7 +266,7 @@ export function Step3LoadWork({ teamId: _teamId }: Props) {
             <p className="text-sm font-medium">Need a template?</p>
             <a
               href="/api/onboarding/csv-template"
-              download="klira-import-template.xlsx"
+              download="Klyra-import-template.xlsx"
               className="inline-flex items-center gap-1.5 text-sm underline underline-offset-2 text-foreground hover:text-foreground/80"
             >
               <Download className="size-3.5" />
