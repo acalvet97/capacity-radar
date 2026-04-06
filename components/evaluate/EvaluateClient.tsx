@@ -20,7 +20,7 @@ import { WeekUtilizationBar } from "@/components/dashboard/WeekUtilizationBar";
 
 import type { DashboardSnapshot } from "@/lib/dashboardEngine";
 import { isValidYmd } from "@/lib/dates";
-import { SuggestedPrompts } from "@/components/evaluate/SuggestedPrompts";
+import { SuggestedPrompts, PROMPT_ICON_MAP } from "@/components/evaluate/SuggestedPrompts";
 import { useAskKlyra } from "@/context/AskKlyraContext";
 import {
   evaluateNewWork,
@@ -39,8 +39,52 @@ import type {
   ResultCardData,
   CommitCardData,
   ChatIntent,
+  ExtractedWorkParams,
 } from "@/lib/evaluateChatTypes";
 import { STREAM_DELIMITER } from "@/lib/evaluateChatTypes";
+
+const VALID_CHAT_INTENTS = new Set<ChatIntent>(["evaluate", "query", "ambiguous"]);
+
+function normalizeOpenCommitAction(raw: unknown): "open_commit_modal" | null {
+  if (raw == null) return null;
+  const n = String(raw)
+    .trim()
+    .toLowerCase()
+    .replace(/^["']|["']$/g, "")
+    .replace(/\s+/g, "_");
+  return n === "open_commit_modal" ? "open_commit_modal" : null;
+}
+
+/** Parse structured JSON from the full stream buffer (runs after all chunks — fixes partial JSON mid-stream). */
+function parseStructuredPayloadFromBuffer(buffer: string): EvaluateChatApiResponse | null {
+  const delimIdx = buffer.indexOf(STREAM_DELIMITER);
+  if (delimIdx === -1) return null;
+  const jsonStr = buffer.slice(delimIdx + STREAM_DELIMITER.length).trim();
+  if (!jsonStr) return null;
+  try {
+    const clean = jsonStr.replace(/```json|```/gi, "").trim();
+    const raw = JSON.parse(clean) as Partial<EvaluateChatApiResponse>;
+    const intent: ChatIntent =
+      typeof raw.intent === "string" && VALID_CHAT_INTENTS.has(raw.intent as ChatIntent)
+        ? (raw.intent as ChatIntent)
+        : "ambiguous";
+    return {
+      message: raw.message ?? "",
+      intent,
+      extractedParams:
+        raw.extractedParams !== null &&
+        raw.extractedParams !== undefined &&
+        typeof raw.extractedParams === "object"
+          ? (raw.extractedParams as EvaluateChatApiResponse["extractedParams"])
+          : null,
+      readyToEvaluate: Boolean(raw.readyToEvaluate),
+      action: normalizeOpenCommitAction(raw.action),
+      engineDigest: raw.engineDigest,
+    };
+  } catch {
+    return null;
+  }
+}
 
 function toApiMessages(messages: EvaluateChatMessage[]) {
   return messages.map(({ role, content }) => ({ role, content }));
@@ -137,6 +181,62 @@ function findLastCommitAssistantIndex(messages: EvaluateChatMessage[]): number {
     if (m.role === "assistant" && m.commitCard && !m.isPostCommit) return i;
   }
   return -1;
+}
+
+/** Params to pre-fill the commit-from-chat modal; prefers stored extraction, else commit card. */
+function resolveCommitParamsFromThread(thread: EvaluateChatMessage[]): ExtractedWorkParams | null {
+  const withExtracted = [...thread]
+    .reverse()
+    .find(
+      (m) =>
+        m.role === "assistant" &&
+        m.extractedParams &&
+        typeof m.extractedParams.totalHours === "number" &&
+        Number.isFinite(m.extractedParams.totalHours) &&
+        Boolean(m.extractedParams.name?.trim())
+    );
+  if (withExtracted?.extractedParams) return withExtracted.extractedParams;
+
+  const withCard = [...thread]
+    .reverse()
+    .find(
+      (m) =>
+        m.role === "assistant" &&
+        m.resultCard &&
+        m.commitCard &&
+        !m.isPostCommit &&
+        Boolean(m.commitCard.name.trim()) &&
+        typeof m.commitCard.totalHours === "number"
+    );
+  if (withCard?.commitCard) {
+    const c = withCard.commitCard;
+    return {
+      name: c.name,
+      totalHours: c.totalHours,
+      startYmd: c.startYmd,
+      deadlineYmd: c.deadlineYmd,
+      allocationMode: c.allocationMode,
+    };
+  }
+  return null;
+}
+
+/** Model sometimes omits action — detect “add to work items?” + short yes. */
+function shouldInlineCommitFromConversation(prev: EvaluateChatMessage[]): boolean {
+  if (prev.length < 3) return false;
+  const streaming = prev[prev.length - 1];
+  const userTurn = prev[prev.length - 2];
+  const priorAssistant = prev[prev.length - 3];
+  if (streaming?.role !== "assistant" || userTurn?.role !== "user" || priorAssistant?.role !== "assistant") {
+    return false;
+  }
+  const asked =
+    typeof priorAssistant.content === "string" &&
+    /(want me to )?add (this|it) to your work items/i.test(priorAssistant.content);
+  const affirms = /^(yes|yep|yeah|sure|ok|okay|add it|go ahead|do it|please)\.?$/i.test(
+    userTurn.content.trim()
+  );
+  return asked && affirms && resolveCommitParamsFromThread(prev) != null;
 }
 
 function ResultCard({
@@ -348,7 +448,7 @@ export function EvaluateClient({
   const [hours, setHours] = useState<string>("40");
   const [startYmd, setStartYmd] = useState<string>(defaultStart);
   const [deadlineYmd, setDeadlineYmd] = useState<string>("");
-  const [allocationMode, setAllocationMode] = useState<AllocationMode>("fill_capacity");
+  const [allocationMode, setAllocationMode] = useState<AllocationMode>("even");
 
   // Derived: has the conversation started (at least one user message)?
   const hasStarted = messages.some((m) => m.role === "user");
@@ -444,13 +544,20 @@ export function EvaluateClient({
         totalHours: nw.totalHours,
         startYmd: nw.startYmd,
         deadlineYmd: nw.deadlineYmd,
-        allocationMode: nw.allocationMode ?? "fill_capacity",
+        allocationMode: nw.allocationMode ?? "even",
       };
 
       setResultFlashKey((k) => k + 1);
       setMessages((m) => {
         const idx = findLastEvaluationAssistantIndex(m);
         if (idx === -1) return m;
+        const extractedParams: ExtractedWorkParams = {
+          name: nw.name,
+          totalHours: nw.totalHours,
+          startYmd: nw.startYmd,
+          deadlineYmd: nw.deadlineYmd,
+          allocationMode: nw.allocationMode ?? "even",
+        };
         return m.map((msg, i) =>
           i === idx
             ? {
@@ -458,6 +565,8 @@ export function EvaluateClient({
                 resultCard,
                 scenarioCards,
                 commitCard,
+                readyToEvaluate: true,
+                extractedParams,
               }
             : msg
         );
@@ -567,7 +676,7 @@ export function EvaluateClient({
     setHours("40");
     setStartYmd(defaultStart);
     setDeadlineYmd("");
-    setAllocationMode("fill_capacity");
+    setAllocationMode("even");
   }, [defaultStart]);
 
   const runChatRequest = useCallback(
@@ -633,7 +742,24 @@ export function EvaluateClient({
             const jsonStr = buffer.slice(delimIdx + STREAM_DELIMITER.length);
 
             try {
-              structuredData = JSON.parse(jsonStr) as EvaluateChatApiResponse;
+              const raw = JSON.parse(jsonStr) as Partial<EvaluateChatApiResponse>;
+              const intent: ChatIntent =
+                typeof raw.intent === "string" && VALID_CHAT_INTENTS.has(raw.intent as ChatIntent)
+                  ? (raw.intent as ChatIntent)
+                  : "ambiguous";
+              structuredData = {
+                message: raw.message ?? "",
+                intent,
+                extractedParams:
+                  raw.extractedParams !== null &&
+                  raw.extractedParams !== undefined &&
+                  typeof raw.extractedParams === "object"
+                    ? (raw.extractedParams as EvaluateChatApiResponse["extractedParams"])
+                    : null,
+                readyToEvaluate: Boolean(raw.readyToEvaluate),
+                action: normalizeOpenCommitAction(raw.action),
+                engineDigest: raw.engineDigest,
+              };
             } catch {
               // JSON may be split across chunks; complete on next read or when done
             }
@@ -644,6 +770,9 @@ export function EvaluateClient({
             renderQueueRef.current = messageText.slice(streamingBufferRef.current.length);
           }
         }
+
+        const reparsed = parseStructuredPayloadFromBuffer(buffer);
+        const finalStructured = reparsed ?? structuredData;
 
         // Stream is done — let the interval self-terminate once the queue drains.
         isChatLoadingRef.current = false;
@@ -660,21 +789,12 @@ export function EvaluateClient({
           }, 50);
         });
 
-        // Commit final content and remove the streaming cursor in one update.
-        // Use messageText if the delimiter was found; fall back to the full buffer
-        // (delimiter-less response) so graceful-degradation prose still renders.
+        // Final assistant message + structured metadata in a single update (avoids
+        // batching races with the commit modal). Use messageText if the delimiter
+        // was found; fall back to the full buffer for delimiter-less responses.
         const finalText = messageText || buffer;
-        setMessages((prev) => {
-          const updated = [...prev];
-          const last = updated[updated.length - 1];
-          if (last?.isStreaming) {
-            updated[updated.length - 1] = { ...last, content: finalText, isStreaming: false };
-          }
-          return updated;
-        });
 
-        // Stream ended — process structured data
-        if (structuredData) {
+        if (finalStructured) {
           const f = formFieldsRef.current;
           let merged = {
             name: f.name,
@@ -684,8 +804,8 @@ export function EvaluateClient({
             allocationMode: f.allocationMode,
           };
 
-          if (structuredData.extractedParams) {
-            merged = mergeExtractedIntoForm(merged, structuredData.extractedParams);
+          if (finalStructured.extractedParams) {
+            merged = mergeExtractedIntoForm(merged, finalStructured.extractedParams);
             setName(merged.name);
             setHours(merged.hours);
             setStartYmd(merged.startYmd);
@@ -693,61 +813,153 @@ export function EvaluateClient({
             setAllocationMode(merged.allocationMode);
           }
 
-          const intent: ChatIntent = structuredData.intent ?? "ambiguous";
+          const intent: ChatIntent = finalStructured.intent ?? "ambiguous";
 
-          if (intent === "query" || intent === "ambiguous") {
-            setMessages((prev) => {
-              const updated = [...prev];
-              updated[updated.length - 1] = {
-                ...updated[updated.length - 1],
-                intent,
-                isStreaming: false,
-              };
-              return updated;
-            });
-            return;
-          }
+          setMessages((prev) => {
+            const updated = [...prev];
+            const lastIdx = updated.length - 1;
+            const last = updated[lastIdx];
+            if (!last || last.role !== "assistant") return updated;
 
-          const safe = sanitizeHoursInput(merged.hours);
-          const newWorkInput = buildNewWorkInputFromMerged(merged, safe);
-
-          if (structuredData.readyToEvaluate && newWorkInput) {
-            const evalResult = evaluateNewWork(snapshot, newWorkInput);
-            const resultCard = buildResultCardData(evalResult);
-            const scenarioCards = !fitsWithinCapacity(evalResult)
-              ? buildOverCapacityScenarios(snapshot, newWorkInput)
-              : undefined;
-            const commitCard: CommitCardData = {
-              name: newWorkInput.name,
-              totalHours: newWorkInput.totalHours,
-              startYmd: newWorkInput.startYmd,
-              deadlineYmd: newWorkInput.deadlineYmd,
-              allocationMode: newWorkInput.allocationMode ?? "fill_capacity",
+            let nextLast: EvaluateChatMessage = {
+              ...last,
+              content: finalText,
+              isStreaming: false,
             };
 
-            setMessages((prev) => {
-              const updated = [...prev];
-              updated[updated.length - 1] = {
-                ...updated[updated.length - 1],
-                intent: "evaluate",
-                resultCard,
-                scenarioCards,
-                commitCard,
-                isStreaming: false,
-              };
-              return updated;
-            });
-          } else {
-            setMessages((prev) => {
-              const updated = [...prev];
-              updated[updated.length - 1] = {
-                ...updated[updated.length - 1],
-                intent,
-                isStreaming: false,
-              };
-              return updated;
-            });
-          }
+            if (intent === "query" || intent === "ambiguous") {
+              nextLast = { ...nextLast, intent, isStreaming: false };
+            } else {
+              const safe = sanitizeHoursInput(merged.hours);
+              const newWorkInput = buildNewWorkInputFromMerged(merged, safe);
+
+              if (finalStructured.readyToEvaluate && newWorkInput) {
+                const evalResult = evaluateNewWork(snapshot, newWorkInput);
+                const resultCard = buildResultCardData(evalResult);
+                const scenarioCards = !fitsWithinCapacity(evalResult)
+                  ? buildOverCapacityScenarios(snapshot, newWorkInput)
+                  : undefined;
+                const commitCard: CommitCardData = {
+                  name: newWorkInput.name,
+                  totalHours: newWorkInput.totalHours,
+                  startYmd: newWorkInput.startYmd,
+                  deadlineYmd: newWorkInput.deadlineYmd,
+                  allocationMode: newWorkInput.allocationMode ?? "even",
+                };
+                const extractedParams: ExtractedWorkParams = {
+                  name: newWorkInput.name,
+                  totalHours: newWorkInput.totalHours,
+                  startYmd: newWorkInput.startYmd,
+                  deadlineYmd: newWorkInput.deadlineYmd,
+                  allocationMode: newWorkInput.allocationMode ?? "even",
+                };
+
+                nextLast = {
+                  ...nextLast,
+                  intent: "evaluate",
+                  resultCard,
+                  scenarioCards,
+                  commitCard,
+                  isStreaming: false,
+                  readyToEvaluate: true,
+                  extractedParams,
+                };
+              } else {
+                nextLast = { ...nextLast, intent, isStreaming: false };
+              }
+            }
+
+            const wantsInlineCommit =
+              finalStructured.action === "open_commit_modal" ||
+              shouldInlineCommitFromConversation(prev);
+
+            if (wantsInlineCommit) {
+              const p = resolveCommitParamsFromThread(prev);
+              if (
+                p &&
+                typeof p.totalHours === "number" &&
+                Number.isFinite(p.totalHours) &&
+                p.name?.trim()
+              ) {
+                const startYmdResolved =
+                  p.startYmd && isValidYmd(p.startYmd)
+                    ? p.startYmd
+                    : (snapshot.horizonWeeks[0]?.weekStartYmd ?? todayYmd);
+                const commitCardFromChat: CommitCardData = {
+                  name: p.name.trim(),
+                  totalHours: p.totalHours,
+                  startYmd: startYmdResolved,
+                  deadlineYmd: p.deadlineYmd,
+                  allocationMode: p.allocationMode ?? "even",
+                };
+                nextLast = { ...nextLast, commitCard: commitCardFromChat };
+                queueMicrotask(() => {
+                  setName(commitCardFromChat.name);
+                  setHours(String(commitCardFromChat.totalHours));
+                  setStartYmd(commitCardFromChat.startYmd);
+                  setDeadlineYmd(commitCardFromChat.deadlineYmd ?? "");
+                  setAllocationMode(commitCardFromChat.allocationMode);
+                });
+              } else {
+                queueMicrotask(() => {
+                  toast.info("Couldn’t load project details from the chat.", {
+                    description: "Opening Committed Work — add or edit your item there.",
+                  });
+                  router.push("/committed-work");
+                });
+              }
+            }
+
+            updated[lastIdx] = nextLast;
+
+            return updated;
+          });
+        } else {
+          setMessages((prev) => {
+            const updated = [...prev];
+            const lastIdx = updated.length - 1;
+            const last = updated[lastIdx];
+            if (!last?.isStreaming) return updated;
+
+            let nextLast: EvaluateChatMessage = {
+              ...last,
+              content: finalText,
+              isStreaming: false,
+            };
+
+            if (shouldInlineCommitFromConversation(prev)) {
+              const p = resolveCommitParamsFromThread(prev);
+              if (
+                p &&
+                typeof p.totalHours === "number" &&
+                Number.isFinite(p.totalHours) &&
+                p.name?.trim()
+              ) {
+                const startYmdResolved =
+                  p.startYmd && isValidYmd(p.startYmd)
+                    ? p.startYmd
+                    : (snapshot.horizonWeeks[0]?.weekStartYmd ?? todayYmd);
+                const commitCardFromChat: CommitCardData = {
+                  name: p.name.trim(),
+                  totalHours: p.totalHours,
+                  startYmd: startYmdResolved,
+                  deadlineYmd: p.deadlineYmd,
+                  allocationMode: p.allocationMode ?? "even",
+                };
+                nextLast = { ...nextLast, commitCard: commitCardFromChat };
+                queueMicrotask(() => {
+                  setName(commitCardFromChat.name);
+                  setHours(String(commitCardFromChat.totalHours));
+                  setStartYmd(commitCardFromChat.startYmd);
+                  setDeadlineYmd(commitCardFromChat.deadlineYmd ?? "");
+                  setAllocationMode(commitCardFromChat.allocationMode);
+                });
+              }
+            }
+
+            updated[lastIdx] = nextLast;
+            return updated;
+          });
         }
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : "Something went wrong";
@@ -780,7 +992,7 @@ export function EvaluateClient({
         });
       }
     },
-    [snapshot, todayYmd, startRenderInterval]
+    [router, snapshot, startRenderInterval, todayYmd]
   );
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -795,13 +1007,18 @@ export function EvaluateClient({
   function sendChat(
     e?: React.FormEvent,
     overrideMessage?: string,
-    overrideHistory?: EvaluateChatMessage[]
+    overrideHistory?: EvaluateChatMessage[],
+    promptIconName?: string
   ) {
     e?.preventDefault();
     const text = (overrideMessage ?? chatInput).trim();
     if (!text || isChatLoading) return;
     const historyToSend = overrideHistory ?? messages;
-    const userMsg: EvaluateChatMessage = { role: "user", content: text };
+    const userMsg: EvaluateChatMessage = {
+      role: "user",
+      content: text,
+      ...(promptIconName && { promptIconName }),
+    };
     const nextThread = [...historyToSend, userMsg];
     setChatError(null);
     setChatInput("");
@@ -814,7 +1031,7 @@ export function EvaluateClient({
     setHours("40");
     setStartYmd(defaultStart);
     setDeadlineYmd("");
-    setAllocationMode("fill_capacity");
+    setAllocationMode("even");
     setChatInput("");
   }
 
@@ -827,7 +1044,7 @@ export function EvaluateClient({
     setHours("40");
     setStartYmd(defaultStart);
     setDeadlineYmd("");
-    setAllocationMode("fill_capacity");
+    setAllocationMode("even");
     sendChat(undefined, "Show me the team status", [INITIAL_GREETING]);
   }
 
@@ -836,7 +1053,7 @@ export function EvaluateClient({
     setHours("40");
     setStartYmd(defaultStart);
     setDeadlineYmd("");
-    setAllocationMode("fill_capacity");
+    setAllocationMode("even");
   }
 
   function handleCommit() {
@@ -855,18 +1072,31 @@ export function EvaluateClient({
         window.setTimeout(() => {
           setCommitSuccess(false);
           setMessages((m) => {
-            const idx = findLastEvaluationAssistantIndex(m);
-            if (idx === -1) return m;
-            return m.map((msg, i) =>
-              i === idx
-                ? {
-                    role: "assistant",
-                    content: "",
-                    isPostCommit: true,
-                    postCommitWorkName: committedName,
-                  }
-                : msg
+            const commitIdx = findLastCommitAssistantIndex(m);
+            const evalIdx = findLastEvaluationAssistantIndex(m);
+            if (commitIdx === -1) return m;
+            if (commitIdx === evalIdx) {
+              return m.map((msg, i) =>
+                i === evalIdx
+                  ? {
+                      role: "assistant",
+                      content: "",
+                      isPostCommit: true,
+                      postCommitWorkName: committedName,
+                    }
+                  : msg
+              );
+            }
+            const cleared = m.map((msg, i) =>
+              i === commitIdx ? { ...msg, commitCard: undefined } : msg
             );
+            return [
+              ...cleared,
+              {
+                role: "assistant",
+                content: `Done. "${committedName}" has been added to your work items.`,
+              },
+            ];
           });
           resetFormOnly();
         }, 1500);
@@ -926,9 +1156,8 @@ export function EvaluateClient({
         </form>
 
         <SuggestedPrompts
-          onSelect={(prompt) => {
-            setChatInput(prompt);
-            emptyInputRef.current?.focus();
+          onSelect={(prompt, iconName) => {
+            sendChat(undefined, prompt, undefined, iconName);
           }}
         />
       </div>
@@ -945,6 +1174,19 @@ export function EvaluateClient({
           <div className="mx-auto max-w-3xl space-y-6 px-4 py-6">
             {messages.map((msg, i) => {
               if (msg.role === "user") {
+                if (msg.promptIconName) {
+                  const Icon = PROMPT_ICON_MAP[msg.promptIconName];
+                  return (
+                    <div key={i} className="flex justify-end">
+                      <div className="bg-muted rounded-2xl rounded-tr-sm px-3 py-2.5 max-w-[75%] text-sm">
+                        <div className="flex items-center gap-2 border border-border/60 rounded-lg px-3 py-1.5 bg-background/60">
+                          {Icon && <Icon className="size-3.5 shrink-0 text-muted-foreground" />}
+                          <span className="text-foreground">{msg.content}</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }
                 return (
                   <div key={i} className="flex justify-end">
                     <div className="bg-primary text-primary-foreground rounded-2xl rounded-tr-sm px-4 py-2.5 max-w-[75%] text-sm whitespace-pre-wrap">
@@ -1035,13 +1277,13 @@ export function EvaluateClient({
         <div className="shrink-0 w-full py-4">
           <div className="mx-auto max-w-3xl px-4">
             <form onSubmit={sendChat}>
-              <InputGroup className="rounded-xl bg-background items-end py-1 pr-1">
+              <InputGroup className="rounded-xl bg-muted/60 border-border items-end py-1 pr-1 has-[[data-slot=input-group-control]:focus-visible]:ring-0 has-[[data-slot=input-group-control]:focus-visible]:border-foreground/25 has-[[data-slot=input-group-control]:focus-visible]:shadow-sm">
                 <InputGroupTextarea
                   ref={chatInputRef}
                   value={chatInput}
                   onChange={(e) => setChatInput(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  placeholder="New project? Team question? Just ask..."
+                  placeholder="Reply..."
                   disabled={isChatLoading}
                   rows={1}
                   className="max-h-40 py-3 overflow-y-auto disabled:opacity-50"
@@ -1065,6 +1307,7 @@ export function EvaluateClient({
           </div>
         </div>
       </div>
+
     </div>
   );
 }

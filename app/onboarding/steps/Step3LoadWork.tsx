@@ -127,7 +127,7 @@ export function Step3LoadWork({ teamId: _teamId }: Props) {
   // ── Method picker ──────────────────────────────────────────────────────────
   if (view === "picker") {
     return (
-      <div className="space-y-8">
+      <div className="space-y-8 text-left">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">Load your work</h1>
           <p className="text-muted-foreground">
@@ -139,15 +139,15 @@ export function Step3LoadWork({ teamId: _teamId }: Props) {
           <Item
             asChild
             variant="outline"
-            className="w-full cursor-pointer hover:bg-muted/40 hover:border-foreground/30 transition-colors"
+            className="w-full cursor-pointer justify-start text-left hover:bg-muted/40 hover:border-foreground/30 transition-colors"
           >
-            <button onClick={() => setView("ai")}>
+            <button type="button" onClick={() => setView("ai")}>
               <ItemMedia variant="icon">
                 <Sparkles />
               </ItemMedia>
-              <ItemContent>
-                <ItemTitle>Describe your work</ItemTitle>
-                <ItemDescription>
+              <ItemContent className="min-w-0 items-start text-left">
+                <ItemTitle className="w-full text-left">Describe your work</ItemTitle>
+                <ItemDescription className="w-full text-left text-pretty">
                   Tell us what your team is working on in plain language — AI will parse it.
                 </ItemDescription>
               </ItemContent>
@@ -157,15 +157,15 @@ export function Step3LoadWork({ teamId: _teamId }: Props) {
           <Item
             asChild
             variant="outline"
-            className="w-full cursor-pointer hover:bg-muted/40 hover:border-foreground/30 transition-colors"
+            className="w-full cursor-pointer justify-start text-left hover:bg-muted/40 hover:border-foreground/30 transition-colors"
           >
-            <button onClick={() => setView("csv")}>
+            <button type="button" onClick={() => setView("csv")}>
               <ItemMedia variant="icon">
                 <FileSpreadsheet />
               </ItemMedia>
-              <ItemContent>
-                <ItemTitle>Upload a file</ItemTitle>
-                <ItemDescription>
+              <ItemContent className="min-w-0 items-start text-left">
+                <ItemTitle className="w-full text-left">Upload a file</ItemTitle>
+                <ItemDescription className="w-full text-left text-pretty">
                   Import projects from a CSV or Excel spreadsheet.
                 </ItemDescription>
               </ItemContent>
@@ -175,17 +175,17 @@ export function Step3LoadWork({ teamId: _teamId }: Props) {
           <Item
             asChild
             variant="outline"
-            className="w-full cursor-pointer hover:bg-muted/40 hover:border-foreground/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full cursor-pointer justify-start text-left hover:bg-muted/40 hover:border-foreground/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <button onClick={handleSkip} disabled={skipPending}>
+            <button type="button" onClick={handleSkip} disabled={skipPending}>
               <ItemMedia variant="icon">
                 <PenLine />
               </ItemMedia>
-              <ItemContent>
-                <ItemTitle>
+              <ItemContent className="min-w-0 items-start text-left">
+                <ItemTitle className="w-full text-left">
                   {skipPending ? "Setting up…" : "I'll add it manually"}
                 </ItemTitle>
-                <ItemDescription>
+                <ItemDescription className="w-full text-left text-pretty">
                   Skip to the dashboard and add projects there.
                 </ItemDescription>
               </ItemContent>
@@ -199,7 +199,7 @@ export function Step3LoadWork({ teamId: _teamId }: Props) {
   // ── AI text input ──────────────────────────────────────────────────────────
   if (view === "ai") {
     return (
-      <div className="space-y-6">
+      <div className="space-y-6 text-left">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">Describe your work</h1>
           <p className="text-muted-foreground">
@@ -208,7 +208,7 @@ export function Step3LoadWork({ teamId: _teamId }: Props) {
         </div>
 
         <form onSubmit={handleAiSubmit}>
-          <InputGroup className="rounded-xl bg-background">
+          <InputGroup className="rounded-xl bg-muted/60 border-border has-[[data-slot=input-group-control]:focus-visible]:ring-0 has-[[data-slot=input-group-control]:focus-visible]:border-foreground/25 has-[[data-slot=input-group-control]:focus-visible]:shadow-sm">
             <InputGroupTextarea
               value={aiText}
               onChange={(e) => setAiText(e.target.value)}
@@ -241,7 +241,7 @@ export function Step3LoadWork({ teamId: _teamId }: Props) {
           </InputGroup>
 
           {aiLoading && (
-            <p className="text-sm text-muted-foreground animate-pulse">
+            <p className="text-left text-sm text-muted-foreground animate-pulse">
               Analysing your work…
             </p>
           )}
@@ -253,7 +253,7 @@ export function Step3LoadWork({ teamId: _teamId }: Props) {
   // ── CSV upload ─────────────────────────────────────────────────────────────
   if (view === "csv") {
     return (
-      <div className="space-y-6">
+      <div className="space-y-6 text-left">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">Upload a file</h1>
           <p className="text-muted-foreground">
@@ -261,7 +261,7 @@ export function Step3LoadWork({ teamId: _teamId }: Props) {
           </p>
         </div>
 
-        <div className="rounded-md border border-dashed p-6 space-y-4">
+        <div className="rounded-md border border-dashed p-6 space-y-4 text-left">
           <div className="space-y-2">
             <p className="text-sm font-medium">Need a template?</p>
             <a
@@ -272,7 +272,7 @@ export function Step3LoadWork({ teamId: _teamId }: Props) {
               <Download className="size-3.5" />
               Download template (.xlsx)
             </a>
-            <ul className="text-xs text-muted-foreground list-disc list-inside space-y-0.5 mt-2">
+            <ul className="text-xs text-muted-foreground list-disc pl-4 space-y-0.5 mt-2 [list-style-position:outside]">
               <li>Dates: YYYY-MM-DD or DD/MM/YYYY</li>
               <li>Hours: a number (e.g. 40, not "40h")</li>
               <li>Leave cells blank if unknown</li>
@@ -283,15 +283,15 @@ export function Step3LoadWork({ teamId: _teamId }: Props) {
             <p className="text-sm font-medium">Upload your file</p>
             <label
               htmlFor="csv-upload"
-              className={`flex flex-col items-center justify-center gap-2 rounded-md border-2 border-dashed border-border p-8 cursor-pointer hover:border-foreground/30 hover:bg-muted/30 transition-colors ${
+              className={`flex flex-col items-start gap-2 rounded-md border-2 border-dashed border-border p-8 cursor-pointer hover:border-foreground/30 hover:bg-muted/30 transition-colors ${
                 csvLoading ? "opacity-50 pointer-events-none" : ""
               }`}
             >
-              <FolderOpen className="size-6 text-muted-foreground" />
-              <span className="text-sm text-muted-foreground">
+              <FolderOpen className="size-6 text-muted-foreground shrink-0" />
+              <span className="text-sm text-muted-foreground text-left">
                 {csvLoading ? "Parsing file…" : "Click to browse or drag and drop"}
               </span>
-              <span className="text-xs text-muted-foreground">.csv, .xlsx, .xls accepted</span>
+              <span className="text-xs text-muted-foreground text-left">.csv, .xlsx, .xls accepted</span>
             </label>
             <input
               id="csv-upload"

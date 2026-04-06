@@ -42,6 +42,7 @@ function parseStructuredData(jsonStr: string): {
   intent: ChatIntent;
   extractedParams: EvaluateChatApiResponse["extractedParams"];
   readyToEvaluate: boolean;
+  action: EvaluateChatApiResponse["action"];
 } {
   try {
     const clean = jsonStr.replace(/```json|```/g, "").trim();
@@ -59,9 +60,19 @@ function parseStructuredData(jsonStr: string): {
           ? (parsed.extractedParams as EvaluateChatApiResponse["extractedParams"])
           : null,
       readyToEvaluate: Boolean(parsed.readyToEvaluate),
+      action:
+        typeof parsed.action === "string" &&
+        parsed.action.trim().toLowerCase().replace(/\s+/g, "_") === "open_commit_modal"
+          ? "open_commit_modal"
+          : null,
     };
   } catch {
-    return { intent: "ambiguous", extractedParams: null, readyToEvaluate: false };
+    return {
+      intent: "ambiguous",
+      extractedParams: null,
+      readyToEvaluate: false,
+      action: null,
+    };
   }
 }
 
@@ -184,6 +195,7 @@ export async function POST(req: Request) {
           intent: structured.intent,
           extractedParams: structured.extractedParams,
           readyToEvaluate: structured.readyToEvaluate,
+          action: structured.action,
         };
 
         controller.enqueue(encoder.encode(STREAM_DELIMITER + JSON.stringify(out)));
@@ -193,6 +205,7 @@ export async function POST(req: Request) {
           intent: "ambiguous",
           extractedParams: null,
           readyToEvaluate: false,
+          action: null,
         };
         try {
           controller.enqueue(

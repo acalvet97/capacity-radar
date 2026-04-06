@@ -1,5 +1,6 @@
 import { supabaseServer } from "@/lib/supabaseServer";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { getTeamRowForOwnerAdmin } from "@/lib/db/ensurePersonalTeamForUser";
 import { NextResponse } from "next/server";
 
 type WorkItemInput = {
@@ -35,18 +36,12 @@ export async function POST(request: Request) {
 
   const admin = supabaseAdmin();
 
-  // Get team for this user
-  const { data: team, error: teamError } = await admin
-    .from("teams")
-    .select("id")
-    .eq("owner_user_id", user.id)
-    .single();
-
-  if (teamError || !team) {
+  const team = await getTeamRowForOwnerAdmin(user.id);
+  if (!team) {
     return NextResponse.json({ error: "No team found" }, { status: 400 });
   }
 
-  const teamId = team.id as string;
+  const teamId = team.id;
 
   // Bulk insert work items
   if (items.length > 0) {
@@ -57,6 +52,7 @@ export async function POST(request: Request) {
       start_date: item.start_date ?? null,
       deadline: item.deadline ?? null,
       import_source: import_source ?? "manual",
+      allocation_mode: "even" as const,
     }));
 
     const { error: insertError } = await admin.from("work_items").insert(rows);

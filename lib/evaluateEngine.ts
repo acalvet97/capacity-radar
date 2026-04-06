@@ -10,7 +10,7 @@ export type NewWorkInput = {
   totalHours: number;
   startYmd: string;      // "YYYY-MM-DD"
   deadlineYmd?: string;  // "YYYY-MM-DD" (optional)
-  allocationMode?: AllocationMode; // Defaults to "fill_capacity"
+  allocationMode?: AllocationMode; // Defaults to "even"
 };
 
 export type EvaluateResult = {
@@ -59,7 +59,7 @@ export function applyWorkToHorizon(
 ): WeekSnapshot[] {
   if (!horizonWeeks.length) return horizonWeeks;
 
-  const mode = input.allocationMode ?? "fill_capacity";
+  const mode = input.allocationMode ?? "even";
 
   const startIdx = clamp(
     weekIndexForYmd(horizonWeeks, input.startYmd),
@@ -317,7 +317,7 @@ export function evaluateNewWork(before: DashboardSnapshot, input: NewWorkInput):
   const endBucket = before.horizonWeeks[endIdx];
   const weekRangeLabel = `${startBucket.weekStartYmd} → ${endBucket.weekEndYmd}`;
 
-  const mode = input.allocationMode ?? "fill_capacity";
+  const mode = input.allocationMode ?? "even";
 
   return {
     before,

@@ -1,23 +1,24 @@
 import type { WorkItemRow } from "@/lib/db/getWorkItemsForTeam";
-import { ymdToUtcDate, diffDaysUtc } from "@/lib/dates";
+import { ymdToUtcDate, diffDaysUtc, startOfIsoWeekUtc } from "@/lib/dates";
 
 export type ImpactLevel = "low" | "medium" | "high";
 
 /**
- * Weeks spanned by a work item (start to deadline, or start to viewEnd if no deadline).
- * Clamped to a minimum of 1 week so short tasks are treated as "this week" for load.
+ * Inclusive count of ISO week buckets from start to end (same rule as dashboardEngine
+ * even distribution: floor(diffDays(end, horizonMonday)) / 7 - floor(diffDays(start, horizonMonday)) / 7 + 1).
+ * Anchored to the ISO Monday of the item's start week so the metric is intrinsic to the item.
  */
-function itemSpanWeeks(
-  item: WorkItemRow,
-  viewEndYmd: string
-): number {
+function itemSpanWeeks(item: WorkItemRow, viewEndYmd: string): number {
   const start = item.start_date ?? "";
   if (!start) return 0;
-  const end = item.deadline ?? viewEndYmd;
+  const endYmd = item.deadline ?? viewEndYmd;
   const startD = ymdToUtcDate(start);
-  const endD = ymdToUtcDate(end);
-  const days = diffDaysUtc(endD, startD) + 1;
-  return Math.max(1, days / 7);
+  const endD = ymdToUtcDate(endYmd);
+  if (endD < startD) return 0;
+  const startWeekMonday = startOfIsoWeekUtc(startD);
+  const startIdx = Math.floor(diffDaysUtc(startD, startWeekMonday) / 7);
+  const endIdx = Math.floor(diffDaysUtc(endD, startWeekMonday) / 7);
+  return Math.max(1, endIdx - startIdx + 1);
 }
 
 /**

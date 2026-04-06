@@ -2,10 +2,10 @@ import { AppSidebar } from "@/components/layout/AppSidebar";
 import { TopBar } from "@/components/layout/TopBar";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { supabaseServer } from "@/lib/supabaseServer";
+import { getTeamRowForOwnerAdmin } from "@/lib/db/ensurePersonalTeamForUser";
 import { redirect } from "next/navigation";
 import { AskKlyraProvider } from "@/context/AskKlyraContext";
 import { getDashboardSnapshotFromDb } from "@/lib/dashboardEngine";
-import { getTeamIdForUser } from "@/lib/db/getTeamIdForUser";
 import { DEFAULT_TZ, todayYmdInTz } from "@/lib/dates";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -14,16 +14,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     data: { user },
   } = await supabase.auth.getUser();
 
+  let teamIdForSnapshot: string | null = null;
   if (user) {
-    const { data: team } = await supabase
-      .from("teams")
-      .select("onboarding_completed")
-      .eq("owner_user_id", user.id)
-      .single();
+    const team = await getTeamRowForOwnerAdmin(user.id);
 
-    if (team && !team.onboarding_completed) {
+    if (!team || !team.onboarding_completed) {
       redirect("/onboarding");
     }
+    teamIdForSnapshot = team.id;
   }
 
   const displayName =
@@ -37,17 +35,20 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   const todayYmd = todayYmdInTz(DEFAULT_TZ);
   let snapshot;
-  try {
-    const teamId = await getTeamIdForUser();
-    snapshot = await getDashboardSnapshotFromDb(teamId, {
-      startYmd: todayYmd,
-      weeks: 26,
-      maxWeeks: 26,
-      locale: "en-GB",
-      tz: DEFAULT_TZ,
-    });
-  } catch {
-    // If snapshot fetch fails (e.g. during onboarding), render layout without modal
+  if (teamIdForSnapshot) {
+    try {
+      snapshot = await getDashboardSnapshotFromDb(teamIdForSnapshot, {
+        startYmd: todayYmd,
+        weeks: 26,
+        maxWeeks: 26,
+        locale: "en-GB",
+        tz: DEFAULT_TZ,
+      });
+    } catch {
+      // If snapshot fetch fails (e.g. during onboarding), render layout without modal
+      snapshot = null;
+    }
+  } else {
     snapshot = null;
   }
 

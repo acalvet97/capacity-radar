@@ -1,4 +1,4 @@
-import { supabaseServer } from "@/lib/supabaseServer";
+import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 export type TeamMemberRow = {
   id: string;
@@ -7,7 +7,7 @@ export type TeamMemberRow = {
 };
 
 export async function getTeamMembers(teamId: string): Promise<TeamMemberRow[]> {
-  const supabase = await supabaseServer();
+  const supabase = supabaseAdmin();
   const { data, error } = await supabase
     .from("team_members")
     .select("id, name, hours_per_cycle")

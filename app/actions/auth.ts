@@ -1,6 +1,7 @@
 'use server';
 
 import { supabaseServer } from '@/lib/supabaseServer';
+import { ensurePersonalTeamForUser } from '@/lib/db/ensurePersonalTeamForUser';
 import { redirect } from 'next/navigation';
 
 export async function register(formData: FormData) {
@@ -16,7 +17,7 @@ export async function register(formData: FormData) {
 
   const supabase = await supabaseServer();
 
-  const { error: authError } = await supabase.auth.signUp({
+  const { data: signUpData, error: authError } = await supabase.auth.signUp({
     email,
     password,
     options: {
@@ -24,6 +25,10 @@ export async function register(formData: FormData) {
     },
   });
   if (authError) throw new Error(authError.message);
+
+  if (signUpData.user && signUpData.session) {
+    await ensurePersonalTeamForUser(signUpData.user);
+  }
 
   redirect(`/verify-email?email=${encodeURIComponent(email)}`);
 }
@@ -40,6 +45,11 @@ export async function login(formData: FormData) {
       redirect(`/verify-email?email=${encodeURIComponent(email)}`);
     }
     throw new Error(error.message);
+  }
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (user) {
+    await ensurePersonalTeamForUser(user);
   }
 
   redirect('/evaluate');

@@ -1,9 +1,10 @@
-import { supabaseServer } from "@/lib/supabaseServer";
+import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { loadTeamCapacityHoursPerCycle } from "@/lib/loadTeamCapacity";
 import { cycleToWeekly } from "@/lib/capacityUnits";
+import { getWeeklyAvailableCapacity } from "@/lib/teamCapacity";
 
 export async function getTeamBufferAndCapacity(teamId: string) {
-  const supabase = await supabaseServer();
+  const supabase = supabaseAdmin();
   const { data, error } = await supabase
     .from("teams")
     .select("buffer_hours_per_week")
@@ -15,6 +16,16 @@ export async function getTeamBufferAndCapacity(teamId: string) {
   const bufferHoursPerWeek = Math.max(0, Number(data?.buffer_hours_per_week ?? 0) || 0);
   const cycleCapacity = await loadTeamCapacityHoursPerCycle(teamId);
   const weeklyCapacity = cycleToWeekly(cycleCapacity);
+  const reservedEnabled = bufferHoursPerWeek > 0;
+  const weeklyAvailableCapacity = getWeeklyAvailableCapacity(
+    weeklyCapacity,
+    bufferHoursPerWeek,
+    reservedEnabled
+  );
 
-  return { bufferHoursPerWeek, weeklyCapacity };
+  return {
+    bufferHoursPerWeek,
+    weeklyCapacity,
+    weeklyAvailableCapacity,
+  };
 }

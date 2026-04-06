@@ -2,6 +2,9 @@
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
+import type { Metadata } from "next";
+export const metadata: Metadata = { title: "Dashboard" };
+
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { WorkItemsTable } from "@/components/work-items/WorkItemsTable";
@@ -46,17 +49,19 @@ export default async function DashboardPage({
   // Fire-and-forget: check for stale work items and create notification if needed
   checkAndCreateStalenessNotification(teamId).catch(() => {});
 
-  const fullSnapshot = await getDashboardSnapshotFromDb(teamId, {
-    startYmd: todayYmd,
-    weeks: 26,
-    maxWeeks: 26,
-    locale: "en-GB",
-    tz: DEFAULT_TZ,
-  });
+  const [fullSnapshot, workItems] = await Promise.all([
+    getDashboardSnapshotFromDb(teamId, {
+      startYmd: todayYmd,
+      weeks: 26,
+      maxWeeks: 26,
+      locale: "en-GB",
+      tz: DEFAULT_TZ,
+    }),
+    getWorkItemsForTeam(teamId),
+  ]);
 
   const horizonWeeksForView = fullSnapshot.horizonWeeks.slice(0, weeksInView);
   const snapshot = recomputeSnapshot(fullSnapshot, horizonWeeksForView);
-  const workItems = await getWorkItemsForTeam(teamId);
 
   const viewStartYmd = horizonWeeksForView[0]?.weekStartYmd ?? "";
   const viewEndYmd = horizonWeeksForView[horizonWeeksForView.length - 1]?.weekEndYmd ?? "";
@@ -166,7 +171,7 @@ export default async function DashboardPage({
           <CardHeader className="pb-1">
             <CardTitleWithTooltip
               title="Total committed"
-              tooltip={snapshot.bufferHoursPerWeek > 0 ? `Includes ${snapshot.bufferHoursPerWeek}h/week reserved capacity.` : undefined}
+              tooltip={snapshot.bufferHoursPerWeek > 0 ? `Project work only. The ${snapshot.bufferHoursPerWeek}h/week structural buffer is shown separately in each week bar.` : undefined}
               className="text-sm font-medium text-muted-foreground"
             />
           </CardHeader>
@@ -355,11 +360,7 @@ export default async function DashboardPage({
           title="Committed work (top 5 by hours)"
           viewStartYmd={viewStartYmd}
           viewEndYmd={viewEndYmd}
-          weeklyCapacityHours={
-            horizonWeeksForView.length > 0
-              ? snapshot.totalCapacityHours / horizonWeeksForView.length
-              : 0
-          }
+          weeklyCapacityHours={horizonWeeksForView[0]?.capacityHours ?? 0}
         />
       </section>
     </div>

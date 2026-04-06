@@ -12,8 +12,8 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: {
-    default: "Capacity Radar",
-    template: "%s · Capacity Radar",
+    default: "Klyra",
+    template: "%s | Klyra",
   },
   description: "Team capacity planning and committed work visibility.",
 };

@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { Eye, EyeOff } from 'lucide-react';
+import { CheckCircle2, Eye, EyeOff, XCircle } from 'lucide-react';
 import { register } from '@/app/actions/auth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';

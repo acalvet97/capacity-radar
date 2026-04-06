@@ -151,7 +151,7 @@ export function WorkItemsTable({
                     <span className="cursor-help">Weekly Load</span>
                   </TooltipTrigger>
                   <TooltipContent side="top">
-                    Equivalent hours/week if spread evenly from start to deadline.
+                    Hours/week using even spread across ISO weeks from start to deadline (same basis as the capacity overview).
                   </TooltipContent>
                 </Tooltip>
               </TableHead>

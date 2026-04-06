@@ -2,11 +2,14 @@
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
+import type { Metadata } from "next";
+export const metadata: Metadata = { title: "Evaluate" };
+
 import { EvaluateClient } from "@/components/evaluate/EvaluateClient";
 import { getDashboardSnapshotFromDb } from "@/lib/dashboardEngine";
 import { DEFAULT_TZ, todayYmdInTz } from "@/lib/dates";
-import { getTeamIdForUser } from "@/lib/db/getTeamIdForUser";
 import { supabaseServer } from "@/lib/supabaseServer";
+import { getTeamIdForUser } from "@/lib/db/getTeamIdForUser";
 
 export default async function EvaluatePage() {
   const supabase = await supabaseServer();
@@ -16,7 +19,12 @@ export default async function EvaluatePage() {
     user?.email?.split("@")[0] ||
     "there";
 
+  if (!user) {
+    throw new Error("Not authenticated");
+  }
+
   const teamId = await getTeamIdForUser();
+
   const todayYmd = todayYmdInTz(DEFAULT_TZ);
 
   const snapshot = await getDashboardSnapshotFromDb(teamId, {

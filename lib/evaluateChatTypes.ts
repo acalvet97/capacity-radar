@@ -34,6 +34,8 @@ export type CommitCardData = {
 export type EvaluateChatMessage = {
   role: "user" | "assistant";
   content: string;
+  /** Set when the message originated from a suggested prompt box. */
+  promptIconName?: string;
   /** True while the streaming response is still arriving. */
   isStreaming?: boolean;
   intent?: ChatIntent;
@@ -43,6 +45,9 @@ export type EvaluateChatMessage = {
   isPostCommit?: boolean;
   /** Set with isPostCommit for the confirmation bubble after a successful commit. */
   postCommitWorkName?: string;
+  /** Last completed evaluation turn — used when opening the commit-from-chat modal. */
+  readyToEvaluate?: boolean;
+  extractedParams?: ExtractedWorkParams | null;
 };
 
 /** AI extraction payload (partial until complete). */
@@ -72,4 +77,6 @@ export type EvaluateChatApiResponse = EvaluateChatExtractionResponse & {
     weeksInSpan: number;
     scenarioTitles?: string[];
   };
+  /** Client opens commit modal when user confirms adding evaluated work. */
+  action: "open_commit_modal" | null;
 };

@@ -147,7 +147,7 @@ export function ReviewTable({ items: initialItems, importSource, onBack }: Props
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5 text-left">
       <div className="space-y-1">
         <h2 className="text-lg font-semibold">Review your projects</h2>
         <p className="text-sm text-muted-foreground">
@@ -169,7 +169,7 @@ export function ReviewTable({ items: initialItems, importSource, onBack }: Props
           <tbody>
             {rows.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-3 py-4 text-sm text-muted-foreground text-center">
+                <td colSpan={5} className="px-3 py-4 text-sm text-muted-foreground text-left">
                   No rows — add one below
                 </td>
               </tr>

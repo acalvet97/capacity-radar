@@ -1,3 +1,6 @@
+import type { Metadata } from "next";
+export const metadata: Metadata = { title: "Settings" };
+
 import { getTeamBufferAndCapacity } from "@/lib/db/getTeamSettings";
 import { getTeamMembers } from "@/lib/db/getTeamMembers";
 import { getTeamIdForUser } from "@/lib/db/getTeamIdForUser";

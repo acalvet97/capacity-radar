@@ -12,7 +12,7 @@ export type CommitWorkInput = {
   totalHours: number;
   startYmd: string;      // "YYYY-MM-DD"
   deadlineYmd?: string;  // "YYYY-MM-DD" | undefined
-  allocationMode?: "even" | "fill_capacity"; // Defaults to "fill_capacity"
+  allocationMode?: "even" | "fill_capacity"; // Defaults to "even"
 };
 
 export async function commitWork(input: CommitWorkInput) {
@@ -47,7 +47,7 @@ export async function commitWork(input: CommitWorkInput) {
     estimated_hours: totalHours,
     start_date: startYmd,
     deadline: deadlineYmd ?? null,
-    allocation_mode: input.allocationMode ?? "fill_capacity",
+    allocation_mode: input.allocationMode ?? "even",
   };
 
   const { data, error } = await supabase

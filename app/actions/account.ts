@@ -63,20 +63,21 @@ export async function deleteAccount() {
 
   const admin = supabaseAdmin();
 
-  const { data: team } = await supabase
+  const { data: teams } = await admin
     .from('teams')
     .select('id, company_id')
-    .eq('owner_user_id', user.id)
-    .single();
+    .eq('owner_user_id', user.id);
 
-  if (team) {
+  const companyIds = new Set<string>();
+  for (const team of teams ?? []) {
     await admin.from('work_items').delete().eq('team_id', team.id);
     await admin.from('team_members').delete().eq('team_id', team.id);
     await admin.from('team_work_type_settings').delete().eq('team_id', team.id);
     await admin.from('teams').delete().eq('id', team.id);
-    if (team.company_id) {
-      await admin.from('companies').delete().eq('id', team.company_id);
-    }
+    if (team.company_id) companyIds.add(team.company_id);
+  }
+  for (const companyId of companyIds) {
+    await admin.from('companies').delete().eq('id', companyId);
   }
 
   await admin.auth.admin.deleteUser(user.id);

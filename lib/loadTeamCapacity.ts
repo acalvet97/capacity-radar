@@ -1,8 +1,8 @@
 // lib/loadTeamCapacity.ts
-import { supabaseServer } from "@/lib/supabaseServer";
+import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 export async function loadTeamCapacityHoursPerCycle(teamId: string) {
-  const supabase = await supabaseServer();
+  const supabase = supabaseAdmin();
 
   const { data, error } = await supabase
     .from("team_members")

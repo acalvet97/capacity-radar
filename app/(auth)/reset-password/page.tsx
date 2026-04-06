@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
-import { Eye, EyeOff } from 'lucide-react';
+import { CheckCircle2, Eye, EyeOff, XCircle } from 'lucide-react';
 import { supabaseBrowser } from '@/lib/supabaseBrowser';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';

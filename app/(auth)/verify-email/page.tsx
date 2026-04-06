@@ -8,7 +8,7 @@ import { supabaseBrowser } from '@/lib/supabaseBrowser';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 
-export default function VerifyEmailPage() {
+function VerifyEmailContent() {
   const searchParams = useSearchParams();
   const email = searchParams.get('email') ?? '';
 
@@ -86,5 +86,21 @@ export default function VerifyEmailPage() {
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+export default function VerifyEmailPage() {
+  return (
+    <React.Suspense
+      fallback={
+        <Card className="rounded-md">
+          <CardContent className="flex min-h-[200px] items-center justify-center pt-6">
+            <p className="text-sm text-muted-foreground">Loading…</p>
+          </CardContent>
+        </Card>
+      }
+    >
+      <VerifyEmailContent />
+    </React.Suspense>
   );
 }

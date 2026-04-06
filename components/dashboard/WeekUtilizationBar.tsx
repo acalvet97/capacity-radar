@@ -17,15 +17,17 @@ export function WeekUtilizationBar({
   committedHours,
   bufferHoursPerWeek = 0,
 }: Props) {
-  const utilization = Math.round((committedHours / capacityHours) * 100);
+  // Color is based on utilization of *available* capacity (total minus buffer)
+  const utilization = capacityHours > 0 ? Math.round((committedHours / capacityHours) * 100) : 0;
   const bucket = exposureBucketFromUtilization(utilization);
-  const workHours = Math.max(0, committedHours - bufferHoursPerWeek);
-  const bufferPct =
-    capacityHours > 0 ? Math.min(100, (bufferHoursPerWeek / capacityHours) * 100) : 0;
+
+  // Bar widths are relative to *total* capacity (available + buffer) so proportions are correct
+  const totalCapacity = capacityHours + bufferHoursPerWeek;
+  const bufferPct = totalCapacity > 0 ? (bufferHoursPerWeek / totalCapacity) * 100 : 0;
   const workPct =
-    capacityHours > 0
-      ? Math.min(100 - bufferPct, (workHours / capacityHours) * 100)
-      : Math.min(utilization, 100);
+    totalCapacity > 0
+      ? Math.min(100 - bufferPct, (committedHours / totalCapacity) * 100)
+      : 0;
 
   return (
     <div className="h-2 w-full rounded-full bg-muted overflow-hidden flex">
