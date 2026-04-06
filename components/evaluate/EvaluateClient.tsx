@@ -20,6 +20,8 @@ import { WeekUtilizationBar } from "@/components/dashboard/WeekUtilizationBar";
 
 import type { DashboardSnapshot } from "@/lib/dashboardEngine";
 import { isValidYmd } from "@/lib/dates";
+import { SuggestedPrompts } from "@/components/evaluate/SuggestedPrompts";
+import { useAskKlyra } from "@/context/AskKlyraContext";
 import {
   evaluateNewWork,
   buildOverCapacityScenarios,
@@ -333,14 +335,13 @@ export function EvaluateClient({
   displayName: string;
 }) {
   const router = useRouter();
+  const { messages, setMessages, setIsResponding } = useAskKlyra();
   const [isPending, startTransition] = useTransition();
   const [isChatLoading, setIsChatLoading] = useState(false);
   const [isStreamingActive, setIsStreamingActive] = useState(false);
   const [chatError, setChatError] = useState<string | null>(null);
 
   const defaultStart = snapshot.horizonWeeks[0]?.weekStartYmd ?? todayYmd;
-
-  const [messages, setMessages] = useState<EvaluateChatMessage[]>([]);
   const [chatInput, setChatInput] = useState("");
 
   const [name, setName] = useState("New work item");
@@ -357,6 +358,7 @@ export function EvaluateClient({
   const hoursDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const threadRef = useRef<HTMLDivElement>(null);
   const chatInputRef = useRef<HTMLTextAreaElement>(null);
+  const emptyInputRef = useRef<HTMLTextAreaElement>(null);
   // Streaming text is written to the DOM via a render queue rather than directly
   // on each chunk. This produces a smooth typewriter effect even when chunks
   // arrive in bursts. streamingBufferRef tracks what has actually been rendered.
@@ -573,6 +575,7 @@ export function EvaluateClient({
       setChatError(null);
       isChatLoadingRef.current = true;
       setIsChatLoading(true);
+      setIsResponding(true);
       setIsStreamingActive(false);
 
       // Reset streaming state and add placeholder to thread
@@ -591,8 +594,6 @@ export function EvaluateClient({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             messages: toApiMessages(nextThread),
-            snapshot,
-            todayYmd,
           }),
         });
 
@@ -772,6 +773,7 @@ export function EvaluateClient({
         renderQueueRef.current = "";
         isChatLoadingRef.current = false;
         setIsChatLoading(false);
+        setIsResponding(false);
         setIsStreamingActive(false);
         requestAnimationFrame(() => {
           chatInputRef.current?.focus();
@@ -807,7 +809,7 @@ export function EvaluateClient({
   }
 
   function resetThreadAndForm() {
-    setMessages([INITIAL_GREETING]);
+    setMessages([]);
     setName("New work item");
     setHours("40");
     setStartYmd(defaultStart);
@@ -898,8 +900,9 @@ export function EvaluateClient({
         </div>
 
         <form onSubmit={sendChat} className="w-full max-w-3xl">
-          <InputGroup className="rounded-xl bg-background items-end py-1 pr-1">
+          <InputGroup className="rounded-xl bg-muted/60 border-border items-end py-1 pr-1 has-[[data-slot=input-group-control]:focus-visible]:ring-0 has-[[data-slot=input-group-control]:focus-visible]:border-foreground/25 has-[[data-slot=input-group-control]:focus-visible]:shadow-sm">
             <InputGroupTextarea
+              ref={emptyInputRef}
               value={chatInput}
               onChange={(e) => setChatInput(e.target.value)}
               onKeyDown={handleKeyDown}
@@ -921,6 +924,13 @@ export function EvaluateClient({
             </InputGroupAddon>
           </InputGroup>
         </form>
+
+        <SuggestedPrompts
+          onSelect={(prompt) => {
+            setChatInput(prompt);
+            emptyInputRef.current?.focus();
+          }}
+        />
       </div>
 
       {/* Active state — thread + thinking indicator + input bar */}

@@ -17,6 +17,16 @@ import {
   SidebarSeparator,
 } from "@/components/ui/sidebar";
 
+function useShortcutLabel() {
+  if (typeof navigator === "undefined") return "⌘K";
+  // userAgentData.platform is the modern API; navigator.platform is the
+  // widely-supported fallback (deprecated but not yet removed anywhere relevant).
+  const platform =
+    (navigator as Navigator & { userAgentData?: { platform?: string } })
+      .userAgentData?.platform ?? navigator.platform;
+  return platform.toUpperCase().includes("MAC") ? "⌘K" : "Ctrl+K";
+}
+
 const dataNavItems = [
   { label: "Dashboard", href: "/dashboard", icon: Gauge },
   { label: "Workload", href: "/committed-work", icon: ClipboardList },
@@ -26,6 +36,7 @@ const SIDEBAR_WIDTH = "16rem";
 
 export function AppSidebar({ user }: { user: NavUserData }) {
   const pathname = usePathname();
+  const shortcutLabel = useShortcutLabel();
 
   function NavItem({ label, href, icon: Icon }: { label: string; href: string; icon: React.ElementType }) {
     return (
@@ -65,7 +76,23 @@ export function AppSidebar({ user }: { user: NavUserData }) {
           {/* Ask Klyra — primary action, sits alone at top */}
           <SidebarGroup className="pb-0">
             <SidebarMenu className="px-0">
-              <NavItem label="Ask Klyra" href="/evaluate" icon={Sparkle} />
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
+                  isActive={pathname === "/evaluate"}
+                  className="rounded-sm px-3 py-2"
+                >
+                  <Link href="/evaluate" className="flex items-center justify-between w-full">
+                    <span className="flex items-center gap-2 min-w-0">
+                      <Sparkle className="size-4 shrink-0" />
+                      <span>Ask Klyra</span>
+                    </span>
+                    <span className="text-[10px] text-muted-foreground/60 font-mono shrink-0 ml-2">
+                      {shortcutLabel}
+                    </span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroup>
 

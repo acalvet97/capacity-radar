@@ -2,7 +2,6 @@ import Anthropic from "@anthropic-ai/sdk";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { NextResponse } from "next/server";
 
-import type { DashboardSnapshot } from "@/lib/dashboardEngine";
 import type {
   EvaluateChatMessage,
   EvaluateChatApiResponse,
@@ -13,6 +12,9 @@ import {
   buildSnapshotDigest,
   buildSystemPrompt,
 } from "@/lib/evaluateChatServer";
+import { getDashboardSnapshotFromDb } from "@/lib/dashboardEngine";
+import { getTeamIdForUser } from "@/lib/db/getTeamIdForUser";
+import { DEFAULT_TZ, todayYmdInTz } from "@/lib/dates";
 
 export const maxDuration = 60;
 
@@ -80,11 +82,7 @@ export async function POST(req: Request) {
     );
   }
 
-  let body: {
-    messages: EvaluateChatMessage[];
-    snapshot: DashboardSnapshot;
-    todayYmd: string;
-  };
+  let body: { messages: EvaluateChatMessage[] };
 
   try {
     body = await req.json();
@@ -92,16 +90,29 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
 
-  const { messages, snapshot, todayYmd } = body;
-  if (
-    !Array.isArray(messages) ||
-    !snapshot?.horizonWeeks ||
-    typeof todayYmd !== "string"
-  ) {
+  const { messages } = body;
+  if (!Array.isArray(messages)) {
     return NextResponse.json({ error: "Invalid request payload." }, { status: 400 });
   }
 
-  const snapshotDigestText = buildSnapshotDigest(snapshot, todayYmd);
+  // Fetch fresh team data server-side so AI responses are always grounded in
+  // current reality — not stale client-side snapshot state.
+  const todayYmd = todayYmdInTz(DEFAULT_TZ);
+  let snapshotDigestText: string;
+  try {
+    const teamId = await getTeamIdForUser();
+    const snapshot = await getDashboardSnapshotFromDb(teamId, {
+      startYmd: todayYmd,
+      weeks: 26,
+      maxWeeks: 26,
+      locale: "en-GB",
+      tz: DEFAULT_TZ,
+    });
+    snapshotDigestText = buildSnapshotDigest(snapshot, todayYmd);
+  } catch {
+    snapshotDigestText = `Today: ${todayYmd}\nNo team data available.`;
+  }
+
   const systemPrompt = buildSystemPrompt(snapshotDigestText, todayYmd);
   const claudeMessages = toAnthropicMessages(messages);
 
