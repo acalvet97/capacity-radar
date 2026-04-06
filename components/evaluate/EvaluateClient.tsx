@@ -8,8 +8,10 @@ import { ArrowUp, ArrowRight, Check, X } from "lucide-react";
 import { DatePicker } from "@/components/ui/date-picker";
 import { cn } from "@/lib/utils";
 
+import { CommitmentAllocationFieldset } from "@/components/committed-work/CommitmentAllocationFieldset";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   InputGroup,
   InputGroupAddon,
@@ -221,22 +223,118 @@ function resolveCommitParamsFromThread(thread: EvaluateChatMessage[]): Extracted
   return null;
 }
 
-/** Model sometimes omits action — detect “add to work items?” + short yes. */
-function shouldInlineCommitFromConversation(prev: EvaluateChatMessage[]): boolean {
+/** Last-resort params from the sidebar form (kept in sync during chat). */
+function tryResolveCommitParamsFromForm(form: {
+  name: string;
+  hours: string;
+  startYmd: string;
+  deadlineYmd: string;
+  allocationMode: AllocationMode;
+}): ExtractedWorkParams | null {
+  const safe = sanitizeHoursInput(form.hours);
+  const nw = buildNewWorkInputFromMerged(
+    {
+      name: form.name,
+      hours: form.hours,
+      startYmd: form.startYmd,
+      deadlineYmd: form.deadlineYmd,
+      allocationMode: form.allocationMode,
+    },
+    safe
+  );
+  if (!nw) return null;
+  return {
+    name: nw.name,
+    totalHours: nw.totalHours,
+    startYmd: nw.startYmd,
+    deadlineYmd: nw.deadlineYmd,
+    allocationMode: nw.allocationMode ?? "even",
+  };
+}
+
+/**
+ * The assistant turn before the user’s “yes” should look like a capacity evaluation.
+ * We cannot require `resultCard` — the model may only output numbers in prose, so structured
+ * cards were never attached even though the user saw a full evaluation.
+ */
+function evalAssistantBeforeUserLooksLikeCapacityTurn(prev: EvaluateChatMessage[]): boolean {
   if (prev.length < 3) return false;
-  const streaming = prev[prev.length - 1];
-  const userTurn = prev[prev.length - 2];
-  const priorAssistant = prev[prev.length - 3];
-  if (streaming?.role !== "assistant" || userTurn?.role !== "user" || priorAssistant?.role !== "assistant") {
+  const userIdx = prev.length - 2;
+  if (prev[userIdx]?.role !== "user" || prev[prev.length - 1]?.role !== "assistant") {
     return false;
   }
-  const asked =
-    typeof priorAssistant.content === "string" &&
-    /(want me to )?add (this|it) to your work items/i.test(priorAssistant.content);
-  const affirms = /^(yes|yep|yeah|sure|ok|okay|add it|go ahead|do it|please)\.?$/i.test(
-    userTurn.content.trim()
+  const a = prev[userIdx - 1];
+  if (a?.role !== "assistant") return false;
+  const content = typeof a.content === "string" ? a.content : "";
+  return Boolean(
+    a.resultCard ||
+      a.readyToEvaluate ||
+      (a.extractedParams &&
+        typeof a.extractedParams.totalHours === "number" &&
+        Number.isFinite(a.extractedParams.totalHours)) ||
+      /want me to add/i.test(content) ||
+      /add (this|it) to your work items/i.test(content) ||
+      /\d+\s*h(?:ours)?\b.*\bfree\b/i.test(content) ||
+      /\b(fits|capacity|utilization)\b/i.test(content)
   );
-  return asked && affirms && resolveCommitParamsFromThread(prev) != null;
+}
+
+/** System prompt tells the model to say this when opening the commit UI. */
+function proseOpensCommitForm(finalText: string): boolean {
+  return /opening the form now/i.test(finalText);
+}
+
+function userAffirmsCommitIntent(content: string): boolean {
+  const t = content.trim();
+  if (!t.length || t.length > 72) return false;
+  if (/^n(o|ope)?\.?$/i.test(t)) return false;
+  return (
+    /^(yes|yep|yeah|sure|ok|okay|please|absolutely|definitely)\.?$/i.test(t) ||
+    /^y\.?$/i.test(t) ||
+    /^(sounds?\s*good|add(\s+it)?|do\s*it|go\s*ahead|that\s*works)\b/i.test(t)
+  );
+}
+
+/** User said yes after an evaluation; wording of the AI invite can vary. */
+function shouldOfferInlineCommitAfterAffirmative(
+  prev: EvaluateChatMessage[],
+  form: { name: string; hours: string; startYmd: string; deadlineYmd: string; allocationMode: AllocationMode }
+): boolean {
+  if (!evalAssistantBeforeUserLooksLikeCapacityTurn(prev)) return false;
+  const userTurn = prev[prev.length - 2];
+  if (!userAffirmsCommitIntent(userTurn.content)) return false;
+  return (
+    resolveCommitParamsFromThread(prev) != null ||
+    tryResolveCommitParamsFromForm(form) != null
+  );
+}
+
+function stripCommitCardsExceptIndex(
+  messages: EvaluateChatMessage[],
+  keepIdx: number
+): EvaluateChatMessage[] {
+  return messages.map((m, i) => {
+    if (i === keepIdx || m.role !== "assistant" || !m.commitCard) return m;
+    return { ...m, commitCard: undefined };
+  });
+}
+
+function buildCommitCardDataFromResolvedParams(
+  p: ExtractedWorkParams,
+  snapshot: DashboardSnapshot,
+  todayYmd: string
+): CommitCardData {
+  const startYmdResolved =
+    p.startYmd && isValidYmd(p.startYmd)
+      ? p.startYmd
+      : (snapshot.horizonWeeks[0]?.weekStartYmd ?? todayYmd);
+  return {
+    name: p.name!.trim(),
+    totalHours: p.totalHours!,
+    startYmd: startYmdResolved,
+    deadlineYmd: p.deadlineYmd,
+    allocationMode: p.allocationMode ?? "even",
+  };
 }
 
 function ResultCard({
@@ -353,67 +451,104 @@ function CommitCard({
     return (
       <div className="rounded-lg border bg-background p-4 flex items-center gap-2 text-green-600">
         <Check className="size-5 shrink-0" />
-        <span className="text-sm font-medium">Committed</span>
+        <span className="text-sm font-medium">Added</span>
       </div>
     );
   }
 
+  const hoursStr =
+    typeof data.totalHours === "number" && Number.isFinite(data.totalHours)
+      ? String(data.totalHours)
+      : "";
+
   return (
-    <div className="rounded-lg border bg-background p-4 space-y-3">
-      <div className="flex gap-2">
+    <div className="rounded-lg border bg-background p-4 space-y-4">
+      <div>
+        <h3 className="text-base font-medium text-foreground">Add existing commitment</h3>
+        <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
+          Log work your team is already committed to. No capacity analysis — just a straight addition
+          to the pipeline.
+        </p>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="klyra-commit-title">Commitment title</Label>
         <Input
+          id="klyra-commit-title"
           value={data.name}
           onChange={(e) => onChange({ name: e.target.value })}
-          className="flex-1 h-8 text-sm"
-          placeholder="Work name"
+          placeholder="Add a title"
+          autoComplete="off"
+          className="h-9 text-sm"
         />
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="klyra-commit-hours">Expected total hours</Label>
         <Input
+          id="klyra-commit-hours"
           type="number"
-          value={data.totalHours}
-          onChange={(e) => onChange({ totalHours: Number(e.target.value) })}
-          className="w-20 h-8 text-sm text-right"
-        />
-        <span className="text-sm text-muted-foreground self-center">h</span>
-      </div>
-
-      <div className="flex items-center gap-2 text-sm">
-        <DatePicker
-          value={data.startYmd}
-          onChange={(v) => onChange({ startYmd: v })}
-          placeholder="Start date"
-          className="h-8 text-xs flex-1"
-        />
-        <ArrowRight className="size-4 shrink-0 text-muted-foreground" />
-        <DatePicker
-          value={data.deadlineYmd ?? ""}
-          onChange={(v) => onChange({ deadlineYmd: v || undefined })}
-          placeholder="No deadline"
-          clearable
-          className="h-8 text-xs flex-1"
+          min={0.5}
+          step={0.5}
+          inputMode="decimal"
+          value={hoursStr}
+          onChange={(e) => {
+            const v = e.target.value;
+            if (v === "") {
+              onChange({ totalHours: 0 });
+              return;
+            }
+            const n = Number(v);
+            if (!Number.isNaN(n)) onChange({ totalHours: n });
+          }}
+          onBlur={() => {
+            const sanitized = sanitizeHoursInput(hoursStr || String(data.totalHours));
+            if (data.totalHours !== sanitized) onChange({ totalHours: sanitized });
+          }}
+          placeholder="E.g.: 40"
+          className="h-9 text-sm"
         />
       </div>
 
-      <div className="flex gap-3 text-xs">
-        {(["fill_capacity", "even"] as AllocationMode[]).map((mode) => (
-          <label key={mode} className="flex items-center gap-1.5 cursor-pointer">
-            <input
-              type="radio"
-              name="commitAlloc"
-              value={mode}
-              checked={data.allocationMode === mode}
-              onChange={() => onChange({ allocationMode: mode })}
-            />
-            <span>{mode === "fill_capacity" ? "Fill capacity" : "Even spread"}</span>
-          </label>
-        ))}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="space-y-2">
+          <Label>Start date</Label>
+          <DatePicker
+            value={data.startYmd}
+            onChange={(v) => onChange({ startYmd: v })}
+            placeholder="dd/mm/yyyy"
+            className="h-9 text-xs"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label>Deadline</Label>
+          <DatePicker
+            value={data.deadlineYmd ?? ""}
+            onChange={(v) => onChange({ deadlineYmd: v || undefined })}
+            placeholder="dd/mm/yyyy"
+            clearable
+            className="h-9 text-xs"
+          />
+        </div>
       </div>
 
-      <div className="flex gap-2 pt-1">
-        <Button size="sm" onClick={onCommit} disabled={isCommitting || !canCommit} className="flex-1">
-          {isCommitting ? "Committing…" : "Commit work"}
+      <CommitmentAllocationFieldset
+        idPrefix="klyra-commit"
+        value={data.allocationMode === "fill_capacity" ? "even" : data.allocationMode}
+        onChange={(mode) => onChange({ allocationMode: mode })}
+      />
+
+      <div className="flex flex-row gap-2 pt-1">
+        <Button
+          size="default"
+          onClick={onCommit}
+          disabled={isCommitting || !canCommit}
+          className="min-w-0 flex-1"
+        >
+          {isCommitting ? "Adding…" : "Commit work"}
         </Button>
-        <Button size="sm" variant="outline" onClick={onDiscard} disabled={isCommitting}>
-          Discard
+        <Button size="default" variant="outline" onClick={onDiscard} disabled={isCommitting} className="shrink-0">
+          Cancel
         </Button>
       </div>
     </div>
@@ -816,7 +951,7 @@ export function EvaluateClient({
           const intent: ChatIntent = finalStructured.intent ?? "ambiguous";
 
           setMessages((prev) => {
-            const updated = [...prev];
+            let updated = [...prev];
             const lastIdx = updated.length - 1;
             const last = updated[lastIdx];
             if (!last || last.role !== "assistant") return updated;
@@ -869,29 +1004,41 @@ export function EvaluateClient({
               }
             }
 
+            const paramsFromMerged = (): ExtractedWorkParams | null => {
+              const safe = sanitizeHoursInput(merged.hours);
+              const nw = buildNewWorkInputFromMerged(merged, safe);
+              if (!nw) return null;
+              return {
+                name: nw.name,
+                totalHours: nw.totalHours,
+                startYmd: nw.startYmd,
+                deadlineYmd: nw.deadlineYmd,
+                allocationMode: nw.allocationMode ?? "even",
+              };
+            };
+
             const wantsInlineCommit =
               finalStructured.action === "open_commit_modal" ||
-              shouldInlineCommitFromConversation(prev);
+              shouldOfferInlineCommitAfterAffirmative(prev, formFieldsRef.current) ||
+              proseOpensCommitForm(finalText);
 
             if (wantsInlineCommit) {
-              const p = resolveCommitParamsFromThread(prev);
+              const p =
+                resolveCommitParamsFromThread(prev) ??
+                paramsFromMerged() ??
+                tryResolveCommitParamsFromForm(formFieldsRef.current);
               if (
                 p &&
                 typeof p.totalHours === "number" &&
                 Number.isFinite(p.totalHours) &&
                 p.name?.trim()
               ) {
-                const startYmdResolved =
-                  p.startYmd && isValidYmd(p.startYmd)
-                    ? p.startYmd
-                    : (snapshot.horizonWeeks[0]?.weekStartYmd ?? todayYmd);
-                const commitCardFromChat: CommitCardData = {
-                  name: p.name.trim(),
-                  totalHours: p.totalHours,
-                  startYmd: startYmdResolved,
-                  deadlineYmd: p.deadlineYmd,
-                  allocationMode: p.allocationMode ?? "even",
-                };
+                updated = stripCommitCardsExceptIndex(updated, lastIdx);
+                const commitCardFromChat = buildCommitCardDataFromResolvedParams(
+                  p,
+                  snapshot,
+                  todayYmd
+                );
                 nextLast = { ...nextLast, commitCard: commitCardFromChat };
                 queueMicrotask(() => {
                   setName(commitCardFromChat.name);
@@ -916,7 +1063,7 @@ export function EvaluateClient({
           });
         } else {
           setMessages((prev) => {
-            const updated = [...prev];
+            let updated = [...prev];
             const lastIdx = updated.length - 1;
             const last = updated[lastIdx];
             if (!last?.isStreaming) return updated;
@@ -927,25 +1074,25 @@ export function EvaluateClient({
               isStreaming: false,
             };
 
-            if (shouldInlineCommitFromConversation(prev)) {
-              const p = resolveCommitParamsFromThread(prev);
+            if (
+              shouldOfferInlineCommitAfterAffirmative(prev, formFieldsRef.current) ||
+              proseOpensCommitForm(finalText)
+            ) {
+              const p =
+                resolveCommitParamsFromThread(prev) ??
+                tryResolveCommitParamsFromForm(formFieldsRef.current);
               if (
                 p &&
                 typeof p.totalHours === "number" &&
                 Number.isFinite(p.totalHours) &&
                 p.name?.trim()
               ) {
-                const startYmdResolved =
-                  p.startYmd && isValidYmd(p.startYmd)
-                    ? p.startYmd
-                    : (snapshot.horizonWeeks[0]?.weekStartYmd ?? todayYmd);
-                const commitCardFromChat: CommitCardData = {
-                  name: p.name.trim(),
-                  totalHours: p.totalHours,
-                  startYmd: startYmdResolved,
-                  deadlineYmd: p.deadlineYmd,
-                  allocationMode: p.allocationMode ?? "even",
-                };
+                updated = stripCommitCardsExceptIndex(updated, lastIdx);
+                const commitCardFromChat = buildCommitCardDataFromResolvedParams(
+                  p,
+                  snapshot,
+                  todayYmd
+                );
                 nextLast = { ...nextLast, commitCard: commitCardFromChat };
                 queueMicrotask(() => {
                   setName(commitCardFromChat.name);
@@ -1064,7 +1211,7 @@ export function EvaluateClient({
           totalHours: safeHours,
           startYmd: startYmd.trim(),
           deadlineYmd: deadlineYmd.trim() ? deadlineYmd.trim() : undefined,
-          allocationMode,
+          allocationMode: "even",
         });
         router.refresh();
         const committedName = name.trim();

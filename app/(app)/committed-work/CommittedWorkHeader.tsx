@@ -3,7 +3,6 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,6 +16,7 @@ import {
 } from "@/components/ui/sheet";
 import { commitWork } from "@/app/(app)/evaluate/actions";
 import { sanitizeHoursInput } from "@/lib/hours";
+import { CommitmentAllocationFieldset } from "@/components/committed-work/CommitmentAllocationFieldset";
 
 export function CommittedWorkHeader() {
   const router = useRouter();
@@ -164,58 +164,11 @@ export function CommittedWorkHeader() {
                 />
               </div>
             </div>
-            <div className="space-y-2">
-              <Label>Allocation mode</Label>
-              <div className="flex flex-col gap-2">
-                {(
-                  [
-                    {
-                      value: "even",
-                      label: "Evenly distributed",
-                      disabled: false,
-                    },
-                    {
-                      value: "fill_capacity",
-                      label: "Fill any time gap available",
-                      disabled: true,
-                    },
-                  ] as const
-                ).map(({ value, label, disabled }) => {
-                  const selected = allocationMode === value;
-                  return (
-                    <button
-                      key={value}
-                      type="button"
-                      disabled={disabled}
-                      onClick={() => !disabled && setAllocationMode(value)}
-                      className={`flex items-center gap-3 rounded-md border px-4 py-3 text-sm transition-colors text-left ${
-                        disabled
-                          ? "border-input opacity-50 cursor-not-allowed"
-                          : selected
-                          ? "border-foreground"
-                          : "border-input hover:border-muted-foreground"
-                      }`}
-                    >
-                      <span
-                        className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border transition-colors ${
-                          selected
-                            ? "border-foreground bg-foreground text-background"
-                            : "border-input"
-                        }`}
-                      >
-                        {selected && <Check className="h-3 w-3" strokeWidth={3} />}
-                      </span>
-                      <span className="flex-1">{label}</span>
-                      {disabled && (
-                        <span className="ml-auto text-[10px] font-medium tracking-wide uppercase text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
-                          Coming soon
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
+            <CommitmentAllocationFieldset
+              idPrefix="sheet-add-commitment"
+              value={allocationMode}
+              onChange={setAllocationMode}
+            />
             {error && (
               <p className="text-sm text-destructive" role="alert">
                 {error}
