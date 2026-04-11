@@ -6,10 +6,10 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
       <div className="w-full max-w-sm px-4">
         <div className="mb-8 flex justify-center">
           <Image
-            src="/klyra-logo.svg"
-            alt="Klyra"
-            width={72}
-            height={33}
+            src="/Klira-logo.svg"
+            alt="Klira"
+            width={86}
+            height={40}
             priority
             className="dark:invert"
           />

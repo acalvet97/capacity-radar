@@ -1,4 +1,4 @@
-# PRD — Klyra Onboarding & Data Freshness System
+# PRD — Klira Onboarding & Data Freshness System
 
 ## Overview
 
@@ -7,7 +7,7 @@ This document covers two related features:
 1. **Onboarding wizard** — guides new users through workspace setup and initial work item import
 2. **Staleness notification system** — keeps work item data accurate after onboarding
 
-The goal is to eliminate the cold-start friction of getting a team's current work into Klyra, and to build a lightweight habit loop that keeps the data trustworthy over time.
+The goal is to eliminate the cold-start friction of getting a team's current work into Klira, and to build a lightweight habit loop that keeps the data trustworthy over time.
 
 ---
 
@@ -57,7 +57,7 @@ ALTER TABLE teams
 
 ### Step 2 — Team Setup
 
-**What it does:** Captures team members and capacity buffer so Klyra can calculate weekly usable capacity.
+**What it does:** Captures team members and capacity buffer so Klira can calculate weekly usable capacity.
 
 **UI:**
 - Reuse the exact same components from the Settings page for:
@@ -77,13 +77,13 @@ Usable capacity:        110h / week
 
 **Notes:**
 - The wizard uses the same API calls as Settings — no new backend logic needed here.
-- "Continue" without adding any members should be allowed (user can do this later in Settings). Show a soft warning: *"You haven't added any team members yet. Klyra needs this to calculate capacity."* but don't block progression.
+- "Continue" without adding any members should be allowed (user can do this later in Settings). Show a soft warning: *"You haven't added any team members yet. Klira needs this to calculate capacity."* but don't block progression.
 
 ---
 
 ### Step 3 — Load Your Work
 
-**What it does:** Gets the team's current projects into Klyra via one of three paths.
+**What it does:** Gets the team's current projects into Klira via one of three paths.
 
 **UI — Method picker:**
 
@@ -169,7 +169,7 @@ Response body:
 - File upload input (accepts `.csv`, `.xlsx`, `.xls`)
 - On upload: parse client-side or send to API, then render the **Review Table**
 
-**Template file** (`Klyra-import-template.xlsx`):
+**Template file** (`Klira-import-template.xlsx`):
 
 | Project Name | Estimated Hours | Start Date | Deadline |
 |---|---|---|---|
@@ -201,7 +201,7 @@ After either import method returns data, show a review table before committing a
 - Null / empty fields render as a soft "—" with a pencil icon on hover to indicate editability
 - Users can delete individual rows with a trash icon
 - Users can add a new empty row manually
-- CTA: "Add [N] projects to Klyra →"
+- CTA: "Add [N] projects to Klira →"
 - Secondary: "← Go back" to re-try the import
 
 **On confirm:**

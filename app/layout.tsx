@@ -12,10 +12,13 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: {
-    default: "Klyra",
-    template: "%s | Klyra",
+    default: "Klira",
+    template: "%s | Klira",
   },
   description: "Team capacity planning and committed work visibility.",
+  icons: {
+    icon: [{ url: "/Klira-favicon.svg", type: "image/svg+xml" }],
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

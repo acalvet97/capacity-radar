@@ -64,16 +64,16 @@ export function AppSidebar({ user }: { user: NavUserData }) {
         <SidebarHeader className="p-5">
           <Link href="/dashboard" className="flex items-center">
             <Image
-              src="/klyra-logo.svg"
-              alt="Klyra"
-              width={120}
-              height={40}
-              className="h-7 w-auto"
+              src="/Klira-logo.svg"
+              alt="Klira"
+              width={115}
+              height={38}
+              className="h-[1.4rem] w-auto"
             />
           </Link>
         </SidebarHeader>
         <SidebarContent className="pt-4">
-          {/* Ask Klyra — primary action, sits alone at top */}
+          {/* Ask Klira — primary action, sits alone at top */}
           <SidebarGroup className="pb-0">
             <SidebarMenu className="px-0">
               <SidebarMenuItem>
@@ -85,7 +85,7 @@ export function AppSidebar({ user }: { user: NavUserData }) {
                   <Link href="/evaluate" className="flex items-center justify-between w-full">
                     <span className="flex items-center gap-2 min-w-0">
                       <Sparkle className="size-4 shrink-0" />
-                      <span>Ask Klyra</span>
+                      <span>Ask Klira</span>
                     </span>
                     <span className="text-[10px] text-muted-foreground/60 font-mono shrink-0 ml-2">
                       {shortcutLabel}

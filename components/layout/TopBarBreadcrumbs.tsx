@@ -4,7 +4,7 @@ import { usePathname } from "next/navigation";
 import { ChevronRight } from "lucide-react";
 
 const PAGE_LABELS: Record<string, string> = {
-  "/evaluate": "Ask Klyra",
+  "/evaluate": "Ask Klira",
   "/dashboard": "Dashboard",
   "/committed-work": "Workload",
   "/settings": "Settings",

@@ -5,28 +5,28 @@ import { Maximize2, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import type { DashboardSnapshot } from "@/lib/dashboardEngine";
 import { EvaluateClient } from "@/components/evaluate/EvaluateClient";
-import { useAskKlyra } from "@/context/AskKlyraContext";
+import { useAskKlira } from "@/context/AskKliraContext";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
-interface AskKlyraModalProps {
+interface AskKliraModalProps {
   onClose: () => void;
   snapshot: DashboardSnapshot;
   todayYmd: string;
   displayName: string;
 }
 
-export function AskKlyraModal({
+export function AskKliraModal({
   onClose,
   snapshot,
   todayYmd,
   displayName,
-}: AskKlyraModalProps) {
+}: AskKliraModalProps) {
   const router = useRouter();
-  const { isResponding } = useAskKlyra();
+  const { isResponding } = useAskKlira();
 
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -63,11 +63,11 @@ export function AskKlyraModal({
         style={{ height: "70vh" }}
         role="dialog"
         aria-modal="true"
-        aria-label="Ask Klyra"
+        aria-label="Ask Klira"
       >
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-2.5 border-b shrink-0">
-          <span className="text-sm font-medium">Ask Klyra</span>
+          <span className="text-sm font-medium">Ask Klira</span>
           <div className="flex items-center gap-0.5">
             <Tooltip>
               <TooltipTrigger asChild>

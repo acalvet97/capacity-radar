@@ -33,7 +33,7 @@ export function WeekUtilizationBar({
     <div className="h-2 w-full rounded-full bg-muted overflow-hidden flex">
       {bufferHoursPerWeek > 0 && bufferPct > 0 && (
         <div
-          className="h-full bg-slate-400/40 shrink-0"
+          className="h-full bg-zinc-400/40 shrink-0"
           style={{ width: `${bufferPct}%` }}
           title="Reserved capacity"
         />

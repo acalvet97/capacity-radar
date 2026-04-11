@@ -4,9 +4,9 @@ import * as React from "react";
 import { usePathname } from "next/navigation";
 import type { DashboardSnapshot } from "@/lib/dashboardEngine";
 import type { EvaluateChatMessage } from "@/lib/evaluateChatTypes";
-import { AskKlyraModal } from "@/components/evaluate/AskKlyraModal";
+import { AskKliraModal } from "@/components/evaluate/AskKliraModal";
 
-interface AskKlyraContextValue {
+interface AskKliraContextValue {
   isOpen: boolean;
   open: () => void;
   close: () => void;
@@ -19,30 +19,30 @@ interface AskKlyraContextValue {
   setIsResponding: (v: boolean) => void;
 }
 
-const AskKlyraContext = React.createContext<AskKlyraContextValue | null>(null);
+const AskKliraContext = React.createContext<AskKliraContextValue | null>(null);
 
-export function useAskKlyra(): AskKlyraContextValue {
-  const ctx = React.useContext(AskKlyraContext);
-  if (!ctx) throw new Error("useAskKlyra must be used within AskKlyraProvider");
+export function useAskKlira(): AskKliraContextValue {
+  const ctx = React.useContext(AskKliraContext);
+  if (!ctx) throw new Error("useAskKlira must be used within AskKliraProvider");
   return ctx;
 }
 
-interface AskKlyraProviderProps {
+interface AskKliraProviderProps {
   children: React.ReactNode;
   /** Null when the snapshot fetch failed (e.g. during onboarding). The modal
    *  is suppressed in that case but the provider still wraps the tree so
-   *  EvaluateClient can safely call useAskKlyra(). */
+   *  EvaluateClient can safely call useAskKlira(). */
   snapshot: DashboardSnapshot | null;
   todayYmd: string;
   displayName: string;
 }
 
-export function AskKlyraProvider({
+export function AskKliraProvider({
   children,
   snapshot,
   todayYmd,
   displayName,
-}: AskKlyraProviderProps) {
+}: AskKliraProviderProps) {
   const pathname = usePathname();
   const [isOpen, setIsOpen] = React.useState(false);
   const [messages, setMessages] = React.useState<EvaluateChatMessage[]>([]);
@@ -65,7 +65,7 @@ export function AskKlyraProvider({
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "k") {
         e.preventDefault();
-        // Already on the full Ask Klyra page — shortcut is a no-op.
+        // Already on the full Ask Klira page — shortcut is a no-op.
         if (pathname === "/evaluate") return;
         // No snapshot means the modal can't render — skip silently.
         if (!snapshot) return;
@@ -77,7 +77,7 @@ export function AskKlyraProvider({
   }, [toggle, pathname, snapshot]);
 
   return (
-    <AskKlyraContext.Provider
+    <AskKliraContext.Provider
       value={{
         isOpen,
         open,
@@ -92,13 +92,13 @@ export function AskKlyraProvider({
     >
       {children}
       {isOpen && snapshot && (
-        <AskKlyraModal
+        <AskKliraModal
           onClose={close}
           snapshot={snapshot}
           todayYmd={todayYmd}
           displayName={displayName}
         />
       )}
-    </AskKlyraContext.Provider>
+    </AskKliraContext.Provider>
   );
 }

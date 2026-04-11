@@ -49,88 +49,81 @@
 :root {
   --radius: 0.625rem;
 
-  /* ─── Light — Tailwind Slate palette ───────────────────────────────
-     slate-50  = oklch(0.984 0.003 247.858)   slate-100 = oklch(0.968 0.007 247.896)
-     slate-200 = oklch(0.929 0.013 255.508)   slate-300 = oklch(0.869 0.022 252.894)
-     slate-400 = oklch(0.704 0.04  256.788)   slate-500 = oklch(0.554 0.046 257.417)
-     slate-600 = oklch(0.446 0.043 257.281)   slate-700 = oklch(0.372 0.044 257.287)
-     slate-800 = oklch(0.279 0.041 260.031)   slate-900 = oklch(0.208 0.042 265.755)
-     slate-950 = oklch(0.129 0.042 264.695)
-  ──────────────────────────────────────────────────────────────────── */
-  --background:              var(--color-slate-50);
-  --foreground:              var(--color-slate-950);
-  /* Cards/popovers are pure white so they lift off the slate-50 base */
+  /* ─── Light — neutrals: Tailwind Zinc; actions: Indigo ──────────── */
+  --background:              var(--color-zinc-50);
+  --foreground:              var(--color-zinc-950);
+  /* Cards/popovers are pure white so they lift off the zinc-50 base */
   --card:                    oklch(1 0 0);
-  --card-foreground:         var(--color-slate-950);
+  --card-foreground:         var(--color-zinc-950);
   --popover:                 oklch(1 0 0);
-  --popover-foreground:      var(--color-slate-950);
-  /* Primary action — slate-900 button, slate-50 label */
-  --primary:                 var(--color-slate-900);
-  --primary-foreground:      var(--color-slate-50);
+  --popover-foreground:      var(--color-zinc-950);
+  /* Primary action — indigo button, zinc-50 label */
+  --primary:                 var(--color-indigo-600);
+  --primary-foreground:      var(--color-zinc-50);
   /* Secondary / muted surfaces */
-  --secondary:               var(--color-slate-100);
-  --secondary-foreground:    var(--color-slate-950);
-  --muted:                   var(--color-slate-100);
-  --muted-foreground:        var(--color-slate-500);
+  --secondary:               var(--color-zinc-100);
+  --secondary-foreground:    var(--color-zinc-950);
+  --muted:                   var(--color-zinc-100);
+  --muted-foreground:        var(--color-zinc-500);
   /* Accent (hover / active) */
-  --accent:                  var(--color-slate-100);
-  --accent-foreground:       var(--color-slate-900);
-  /* Semantic state — not slate */
+  --accent:                  var(--color-zinc-100);
+  --accent-foreground:       var(--color-zinc-900);
+  /* Semantic state */
   --destructive:             oklch(0.577 0.245 27.325);
   /* Chrome */
-  --border:                  var(--color-slate-200);
-  --input:                   var(--color-slate-200);
-  --ring:                    var(--color-slate-400);
-  /* Charts — intentionally non-slate for visual contrast */
+  --border:                  var(--color-zinc-200);
+  --input:                   var(--color-zinc-200);
+  --ring:                    var(--color-indigo-500);
+  /* Charts — intentionally distinct neutrals for visual contrast */
   --chart-1: oklch(0.646 0.222  41.116);
   --chart-2: oklch(0.6   0.118 184.704);
   --chart-3: oklch(0.398 0.07  227.392);
   --chart-4: oklch(0.828 0.189  84.429);
   --chart-5: oklch(0.769 0.188  70.08);
   /* Sidebar */
-  --sidebar:                         var(--color-slate-100);
-  --sidebar-foreground:              var(--color-slate-950);
-  --sidebar-primary:                 var(--color-slate-900);
-  --sidebar-primary-foreground:      var(--color-slate-50);
-  --sidebar-accent:                  var(--color-slate-200);
-  --sidebar-accent-foreground:       var(--color-slate-900);
-  --sidebar-border:                  var(--color-slate-200);
-  --sidebar-ring:                    var(--color-slate-400);
+  --sidebar:                         var(--color-zinc-100);
+  --sidebar-foreground:              var(--color-zinc-950);
+  --sidebar-primary:                 var(--color-indigo-600);
+  --sidebar-primary-foreground:      var(--color-zinc-50);
+  --sidebar-accent:                  var(--color-zinc-200);
+  --sidebar-accent-foreground:       var(--color-zinc-900);
+  --sidebar-border:                  var(--color-zinc-200);
+  --sidebar-ring:                    var(--color-indigo-500);
 }
 
 .dark {
-  /* ─── Dark — Tailwind Slate palette ──────────────────────────────── */
-  --background:              var(--color-slate-950);
-  --foreground:              var(--color-slate-50);
-  --card:                    var(--color-slate-900);
-  --card-foreground:         var(--color-slate-50);
-  --popover:                 var(--color-slate-900);
-  --popover-foreground:      var(--color-slate-50);
-  --primary:                 var(--color-slate-100);
-  --primary-foreground:      var(--color-slate-950);
-  --secondary:               var(--color-slate-800);
-  --secondary-foreground:    var(--color-slate-50);
-  --muted:                   var(--color-slate-800);
-  --muted-foreground:        var(--color-slate-400);
-  --accent:                  var(--color-slate-800);
-  --accent-foreground:       var(--color-slate-100);
+  /* ─── Dark — neutrals: Zinc; actions: Indigo ─────────────────────── */
+  --background:              var(--color-zinc-950);
+  --foreground:              var(--color-zinc-50);
+  --card:                    var(--color-zinc-900);
+  --card-foreground:         var(--color-zinc-50);
+  --popover:                 var(--color-zinc-900);
+  --popover-foreground:      var(--color-zinc-50);
+  --primary:                 var(--color-indigo-500);
+  --primary-foreground:      var(--color-zinc-950);
+  --secondary:               var(--color-zinc-800);
+  --secondary-foreground:    var(--color-zinc-50);
+  --muted:                   var(--color-zinc-800);
+  --muted-foreground:        var(--color-zinc-400);
+  --accent:                  var(--color-zinc-800);
+  --accent-foreground:       var(--color-zinc-100);
   --destructive:             oklch(0.704 0.191 22.216);
-  --border:                  var(--color-slate-700);
-  --input:                   var(--color-slate-700);
-  --ring:                    var(--color-slate-500);
+  --border:                  var(--color-zinc-700);
+  --input:                   var(--color-zinc-700);
+  --ring:                    var(--color-indigo-400);
   --chart-1: oklch(0.488 0.243 264.376);
   --chart-2: oklch(0.696 0.17  162.48);
   --chart-3: oklch(0.769 0.188  70.08);
   --chart-4: oklch(0.627 0.265 303.9);
   --chart-5: oklch(0.645 0.246  16.439);
-  --sidebar:                         var(--color-slate-950);
-  --sidebar-foreground:              var(--color-slate-50);
-  --sidebar-primary:                 var(--color-slate-400);
-  --sidebar-primary-foreground:      var(--color-slate-950);
-  --sidebar-accent:                  var(--color-slate-800);
-  --sidebar-accent-foreground:       var(--color-slate-100);
-  --sidebar-border:                  var(--color-slate-700);
-  --sidebar-ring:                    var(--color-slate-500);
+  --sidebar:                         var(--color-zinc-950);
+  --sidebar-foreground:              var(--color-zinc-50);
+  --sidebar-primary:                 var(--color-indigo-400);
+  --sidebar-primary-foreground:      var(--color-zinc-950);
+  --sidebar-accent:                  var(--color-zinc-800);
+  --sidebar-accent-foreground:       var(--color-zinc-100);
+  --sidebar-border:                  var(--color-zinc-700);
+  --sidebar-ring:                    var(--color-indigo-400);
 }
 
 /* Sheet slide animations */

@@ -23,7 +23,7 @@ import { WeekUtilizationBar } from "@/components/dashboard/WeekUtilizationBar";
 import type { DashboardSnapshot } from "@/lib/dashboardEngine";
 import { isValidYmd } from "@/lib/dates";
 import { SuggestedPrompts, PROMPT_ICON_MAP } from "@/components/evaluate/SuggestedPrompts";
-import { useAskKlyra } from "@/context/AskKlyraContext";
+import { useAskKlira } from "@/context/AskKliraContext";
 import {
   evaluateNewWork,
   buildOverCapacityScenarios,
@@ -472,9 +472,9 @@ function CommitCard({
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="klyra-commit-title">Commitment title</Label>
+        <Label htmlFor="Klira-commit-title">Commitment title</Label>
         <Input
-          id="klyra-commit-title"
+          id="Klira-commit-title"
           value={data.name}
           onChange={(e) => onChange({ name: e.target.value })}
           placeholder="Add a title"
@@ -484,9 +484,9 @@ function CommitCard({
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="klyra-commit-hours">Expected total hours</Label>
+        <Label htmlFor="Klira-commit-hours">Expected total hours</Label>
         <Input
-          id="klyra-commit-hours"
+          id="Klira-commit-hours"
           type="number"
           min={0.5}
           step={0.5}
@@ -533,7 +533,7 @@ function CommitCard({
       </div>
 
       <CommitmentAllocationFieldset
-        idPrefix="klyra-commit"
+        idPrefix="Klira-commit"
         value={data.allocationMode === "fill_capacity" ? "even" : data.allocationMode}
         onChange={(mode) => onChange({ allocationMode: mode })}
       />
@@ -570,7 +570,7 @@ export function EvaluateClient({
   displayName: string;
 }) {
   const router = useRouter();
-  const { messages, setMessages, setIsResponding } = useAskKlyra();
+  const { messages, setMessages, setIsResponding } = useAskKlira();
   const [isPending, startTransition] = useTransition();
   const [isChatLoading, setIsChatLoading] = useState(false);
   const [isStreamingActive, setIsStreamingActive] = useState(false);
@@ -1415,7 +1415,7 @@ export function EvaluateClient({
         {isChatLoading && !isStreamingActive && (
           <div className="w-full">
             <div className="mx-auto max-w-3xl px-4 py-2 text-xs text-muted-foreground animate-pulse">
-              Klyra is thinking...
+              Klira is thinking...
             </div>
           </div>
         )}

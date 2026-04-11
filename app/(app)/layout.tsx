@@ -4,7 +4,7 @@ import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { getTeamRowForOwnerAdmin } from "@/lib/db/ensurePersonalTeamForUser";
 import { redirect } from "next/navigation";
-import { AskKlyraProvider } from "@/context/AskKlyraContext";
+import { AskKliraProvider } from "@/context/AskKliraContext";
 import { getDashboardSnapshotFromDb } from "@/lib/dashboardEngine";
 import { DEFAULT_TZ, todayYmdInTz } from "@/lib/dates";
 
@@ -64,13 +64,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <SidebarInset className="ml-[16rem] flex flex-col">
         <TopBar />
         <main className="min-h-0 flex-1">
-          <AskKlyraProvider
+          <AskKliraProvider
             snapshot={snapshot}
             todayYmd={todayYmd}
             displayName={displayName}
           >
             {children}
-          </AskKlyraProvider>
+          </AskKliraProvider>
         </main>
       </SidebarInset>
     </SidebarProvider>
