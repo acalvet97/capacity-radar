@@ -63,7 +63,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       />
       <SidebarInset className="ml-[16rem] flex flex-col">
         <TopBar />
-        <main className="min-h-0 flex-1">
+        <main className="flex min-h-0 flex-1 flex-col">
           <AskKliraProvider
             snapshot={snapshot}
             todayYmd={todayYmd}

@@ -10,7 +10,6 @@ import {
   SidebarContent,
   SidebarFooter,
   SidebarGroup,
-  SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
@@ -61,17 +60,21 @@ export function AppSidebar({ user }: { user: NavUserData }) {
       style={{ width: SIDEBAR_WIDTH }}
     >
       <Sidebar collapsible="none" className="h-full w-full flex-1 flex-col">
-        <SidebarHeader className="p-5">
+        <div
+          data-slot="sidebar-header"
+          data-sidebar="header"
+          className="flex h-[60px] shrink-0 items-center px-5"
+        >
           <Link href="/dashboard" className="flex items-center">
             <Image
               src="/Klira-logo.svg"
               alt="Klira"
               width={115}
               height={38}
-              className="h-[1.4rem] w-auto"
+              className="h-[1.35rem] w-auto"
             />
           </Link>
-        </SidebarHeader>
+        </div>
         <SidebarContent className="pt-4">
           {/* Ask Klira — primary action, sits alone at top */}
           <SidebarGroup className="pb-0">

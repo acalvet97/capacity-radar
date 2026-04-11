@@ -65,7 +65,9 @@ export function NavUser({ user }: { user: NavUserData }) {
                 {avatarSrc ? (
                   <AvatarImage src={avatarSrc} alt={user.name} />
                 ) : null}
-                <AvatarFallback className="rounded-lg text-xs">{initials}</AvatarFallback>
+                <AvatarFallback className="rounded-lg bg-primary text-xs font-medium text-primary-foreground">
+                  {initials}
+                </AvatarFallback>
               </Avatar>
               <div className="grid flex-1 text-left text-sm leading-tight">
                 <span className="truncate font-medium">{user.name}</span>
@@ -88,7 +90,7 @@ export function NavUser({ user }: { user: NavUserData }) {
                   {avatarSrc ? (
                     <AvatarImage src={avatarSrc} alt={user.name} />
                   ) : null}
-                  <AvatarFallback className="rounded-lg text-xs">
+                  <AvatarFallback className="rounded-lg bg-primary text-xs font-medium text-primary-foreground">
                     {initials}
                   </AvatarFallback>
                 </Avatar>

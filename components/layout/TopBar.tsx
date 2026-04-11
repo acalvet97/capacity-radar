@@ -4,11 +4,6 @@ import { getTeamName } from "@/lib/db/getTeamName";
 import { NotificationBell } from "./NotificationBell";
 import { TopBarBreadcrumbs } from "./TopBarBreadcrumbs";
 
-/**
- * Height matches the sidebar header (logo row): p-5 + h-7 + p-5 = 4.25rem
- */
-const TOP_BAR_HEIGHT = "4.25rem";
-
 export async function TopBar() {
   const supabase = await supabaseServer();
   const { data: { user } } = await supabase.auth.getUser();
@@ -33,10 +28,7 @@ export async function TopBar() {
   }
 
   return (
-    <header
-      className="sticky top-0 z-40 flex shrink-0 items-center justify-between border-b border-border bg-background px-8"
-      style={{ height: TOP_BAR_HEIGHT }}
-    >
+    <header className="sticky top-0 z-40 flex h-[60px] shrink-0 items-center justify-between border-b border-border bg-background px-8">
       <TopBarBreadcrumbs teamName={teamName} />
       <NotificationBell initialNotifications={initialNotifications} />
     </header>

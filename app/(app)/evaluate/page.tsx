@@ -36,7 +36,7 @@ export default async function EvaluatePage() {
   });
 
   return (
-    <div className="flex h-[calc(100svh-4.25rem)] min-h-0 min-w-0 w-full flex-col overflow-hidden pb-4 pt-0">
+    <div className="flex h-full min-h-0 min-w-0 w-full flex-col overflow-hidden pb-4 pt-0">
       <EvaluateClient snapshot={snapshot} todayYmd={todayYmd} displayName={displayName} />
     </div>
   );

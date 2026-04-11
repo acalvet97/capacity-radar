@@ -14,7 +14,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   InputGroup,
-  InputGroupAddon,
   InputGroupButton,
   InputGroupTextarea,
 } from "@/components/ui/input-group";
@@ -1262,51 +1261,57 @@ export function EvaluateClient({
       {/* Empty state — centred greeting + prominent input */}
       <div
         className={cn(
-          "absolute inset-0 z-10 flex flex-col items-center justify-center px-4 pb-8 gap-6",
+          "absolute inset-0 z-10 flex flex-col items-center justify-center px-4 pb-8",
           "transition-opacity duration-150",
           hasStarted ? "opacity-0 pointer-events-none" : "opacity-100"
         )}
       >
-        <div className="text-center space-y-2">
-          <h2 className="text-3xl font-semibold tracking-tight">
-            Hello, {displayName}
-          </h2>
-          <p className="text-muted-foreground text-base">
-            How can I help your team today?
-          </p>
-        </div>
+        <div className="mx-auto flex w-full max-w-3xl flex-col items-stretch">
+          <div className="flex flex-col gap-6">
+            <div className="text-center space-y-3">
+              <h2 className="text-[2.5rem]! font-normal tracking-tight text-zinc-900">
+                Hello, {displayName}
+              </h2>
+              <p className="text-[1.25rem] text-zinc-500">
+                How can I help your team today?
+              </p>
+            </div>
 
-        <form onSubmit={sendChat} className="w-full max-w-3xl">
-          <InputGroup className="rounded-xl bg-muted/60 border-border items-end py-1 pr-1 has-[[data-slot=input-group-control]:focus-visible]:ring-0 has-[[data-slot=input-group-control]:focus-visible]:border-foreground/25 has-[[data-slot=input-group-control]:focus-visible]:shadow-sm">
-            <InputGroupTextarea
-              ref={emptyInputRef}
-              value={chatInput}
-              onChange={(e) => setChatInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="New project? Team question? Just ask..."
-              rows={3}
-              disabled={isChatLoading}
-              className="disabled:opacity-50"
+            <form onSubmit={sendChat} className="w-full">
+              <InputGroup className="flex flex-col items-stretch overflow-hidden rounded-xl bg-white dark:bg-white border-zinc-100 has-[[data-slot=input-group-control]:focus-visible]:ring-0 has-[[data-slot=input-group-control]:focus-visible]:border-zinc-200">
+                <InputGroupTextarea
+                  ref={emptyInputRef}
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder="New project? Team question? Just ask..."
+                  rows={3}
+                  disabled={isChatLoading}
+                  className="w-full min-w-0 flex-none p-5 text-base md:text-base disabled:opacity-50"
+                />
+                <div className="flex w-full shrink-0 justify-end pr-3 pb-3">
+                  <InputGroupButton
+                    type="submit"
+                    size="icon-sm"
+                    variant={chatInput.trim() ? "default" : "ghost"}
+                    disabled={isChatLoading || !chatInput.trim()}
+                    aria-label="Send message"
+                  >
+                    <ArrowUp className="size-4" />
+                  </InputGroupButton>
+                </div>
+              </InputGroup>
+            </form>
+          </div>
+
+          <div className="mt-12 w-full">
+            <SuggestedPrompts
+              onSelect={(prompt, iconName) => {
+                sendChat(undefined, prompt, undefined, iconName);
+              }}
             />
-            <InputGroupAddon align="inline-end">
-              <InputGroupButton
-                type="submit"
-                size="icon-sm"
-                variant={chatInput.trim() ? "default" : "ghost"}
-                disabled={isChatLoading || !chatInput.trim()}
-                aria-label="Send message"
-              >
-                <ArrowUp className="size-4" />
-              </InputGroupButton>
-            </InputGroupAddon>
-          </InputGroup>
-        </form>
-
-        <SuggestedPrompts
-          onSelect={(prompt, iconName) => {
-            sendChat(undefined, prompt, undefined, iconName);
-          }}
-        />
+          </div>
+        </div>
       </div>
 
       {/* Active state — thread + thinking indicator + input bar */}
@@ -1424,7 +1429,7 @@ export function EvaluateClient({
         <div className="shrink-0 w-full py-4">
           <div className="mx-auto max-w-3xl px-4">
             <form onSubmit={sendChat}>
-              <InputGroup className="rounded-xl bg-muted/60 border-border items-end py-1 pr-1 has-[[data-slot=input-group-control]:focus-visible]:ring-0 has-[[data-slot=input-group-control]:focus-visible]:border-foreground/25 has-[[data-slot=input-group-control]:focus-visible]:shadow-sm">
+              <InputGroup className="flex flex-col items-stretch overflow-hidden rounded-xl bg-white dark:bg-white border-zinc-100 has-[[data-slot=input-group-control]:focus-visible]:ring-0 has-[[data-slot=input-group-control]:focus-visible]:border-zinc-200">
                 <InputGroupTextarea
                   ref={chatInputRef}
                   value={chatInput}
@@ -1433,9 +1438,9 @@ export function EvaluateClient({
                   placeholder="Reply..."
                   disabled={isChatLoading}
                   rows={1}
-                  className="max-h-40 py-3 overflow-y-auto disabled:opacity-50"
+                  className="max-h-40 w-full min-w-0 flex-none overflow-y-auto p-5 text-base md:text-base disabled:opacity-50"
                 />
-                <InputGroupAddon align="inline-end">
+                <div className="flex w-full shrink-0 justify-end pr-3 pb-3">
                   <InputGroupButton
                     type="submit"
                     size="icon-sm"
@@ -1445,7 +1450,7 @@ export function EvaluateClient({
                   >
                     <ArrowUp className="size-4" />
                   </InputGroupButton>
-                </InputGroupAddon>
+                </div>
               </InputGroup>
             </form>
             {chatError && (

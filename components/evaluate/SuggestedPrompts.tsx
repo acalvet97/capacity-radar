@@ -34,7 +34,7 @@ export function SuggestedPrompts({
   return (
     <div className="flex flex-col gap-3 w-full max-w-3xl">
       <p className="text-xs text-muted-foreground">Get started with some examples</p>
-      <div className="flex flex-col sm:flex-row gap-2.5">
+      <div className="flex flex-col gap-4 sm:flex-row">
         {PROMPTS.map(({ title, description, iconName }) => {
           const Icon = PROMPT_ICON_MAP[iconName];
           return (
@@ -42,11 +42,17 @@ export function SuggestedPrompts({
               key={title}
               type="button"
               onClick={() => onSelect(title, iconName)}
-              className="flex-1 rounded-xl border bg-background px-4 py-3 text-left hover:bg-muted/50 transition-colors"
+              className="flex flex-1 flex-col items-start rounded-lg border border-transparent bg-white px-4 py-3 text-left transition-colors hover:border-zinc-100 hover:bg-white dark:bg-white dark:hover:border-zinc-100 dark:hover:bg-white"
             >
-              <Icon className="size-3.5 text-muted-foreground mb-5" />
-              <p className="text-sm font-medium text-foreground">{title}</p>
-              <p className="text-xs text-muted-foreground mt-0.5 leading-snug">{description}</p>
+              <Icon className="size-4 shrink-0 text-zinc-500" aria-hidden />
+              <span className="mt-8 flex min-w-0 w-full flex-col gap-0.5 text-left">
+                <span className="text-[0.875rem]! font-medium text-zinc-800">
+                  {title}
+                </span>
+                <span className="text-[0.75rem]! leading-snug text-zinc-500">
+                  {description}
+                </span>
+              </span>
             </button>
           );
         })}
