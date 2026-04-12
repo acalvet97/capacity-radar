@@ -59,7 +59,7 @@ export function AskKliraModal({
 
       {/* Panel */}
       <div
-        className="relative z-10 w-full max-w-2xl mx-4 bg-background rounded-xl border shadow-xl flex flex-col overflow-hidden"
+        className="relative z-10 w-full max-w-4xl mx-4 bg-background rounded-xl border shadow-xl flex flex-col overflow-hidden"
         style={{ height: "70vh" }}
         role="dialog"
         aria-modal="true"

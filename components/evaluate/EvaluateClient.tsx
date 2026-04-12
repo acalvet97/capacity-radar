@@ -1267,7 +1267,7 @@ export function EvaluateClient({
         )}
       >
         <div className="mx-auto flex w-full max-w-3xl flex-col items-stretch">
-          <div className="flex flex-col gap-6">
+          <div className="flex flex-col gap-8">
             <div className="text-center space-y-3">
               <h2 className="text-[2.5rem]! font-normal tracking-tight text-zinc-900">
                 Hello, {displayName}

@@ -42,10 +42,10 @@ export function SuggestedPrompts({
               key={title}
               type="button"
               onClick={() => onSelect(title, iconName)}
-              className="flex flex-1 flex-col items-start rounded-lg border border-transparent bg-white px-4 py-3 text-left transition-colors hover:border-zinc-100 hover:bg-white dark:bg-white dark:hover:border-zinc-100 dark:hover:bg-white"
+              className="flex flex-1 flex-col items-start rounded-lg border border-transparent bg-white px-3 py-3 text-left transition-colors hover:border-zinc-100 hover:bg-white dark:bg-white dark:hover:border-zinc-100 dark:hover:bg-white"
             >
               <Icon className="size-4 shrink-0 text-zinc-500" aria-hidden />
-              <span className="mt-8 flex min-w-0 w-full flex-col gap-0.5 text-left">
+              <span className="mt-8 flex min-w-0 w-full flex-col gap-1 text-left">
                 <span className="text-[0.875rem]! font-medium text-zinc-800">
                   {title}
                 </span>
