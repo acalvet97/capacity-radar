@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Trash2, Plus, Pencil, ArrowRight, ArrowLeft } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { trackWorkItemAdded } from "@/lib/mixpanel";
 
 export type ReviewItem = {
   id: string;
@@ -99,6 +100,12 @@ export function ReviewTable({ items: initialItems, importSource, onBack }: Props
           const data = await res.json();
           throw new Error(data.error ?? "Failed to save");
         }
+
+        trackWorkItemAdded({
+          source: "onboarding_bulk",
+          item_count: rows.length,
+          import_source: importSource,
+        });
 
         router.push("/dashboard");
         router.refresh();

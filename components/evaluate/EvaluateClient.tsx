@@ -34,6 +34,7 @@ import {
 } from "@/lib/evaluateEngine";
 import { commitWork } from "@/app/(app)/evaluate/actions";
 import { sanitizeHoursInput } from "@/lib/hours";
+import { trackWorkItemAdded } from "@/lib/mixpanel";
 import type {
   EvaluateChatMessage,
   EvaluateChatApiResponse,
@@ -1211,6 +1212,12 @@ export function EvaluateClient({
           startYmd: startYmd.trim(),
           deadlineYmd: deadlineYmd.trim() ? deadlineYmd.trim() : undefined,
           allocationMode: "even",
+        });
+        trackWorkItemAdded({
+          source: "evaluate",
+          estimated_hours: safeHours,
+          has_deadline: Boolean(deadlineYmd.trim()),
+          allocation_mode: "even",
         });
         router.refresh();
         const committedName = name.trim();

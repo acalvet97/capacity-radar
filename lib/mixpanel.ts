@@ -43,4 +43,29 @@ export function initMixpanel(): void {
   });
 }
 
+export type TrackWorkItemAddedPayload =
+  | {
+      source: "evaluate" | "committed_work";
+      estimated_hours: number;
+      has_deadline: boolean;
+      allocation_mode: "even" | "fill_capacity";
+    }
+  | {
+      source: "onboarding_bulk";
+      item_count: number;
+      import_source: "ai" | "csv";
+    };
+
+/**
+ * Client-only. Call after a work item (or batch) is successfully persisted.
+ * No-ops when Mixpanel is not configured. Assumes `initMixpanel()` already ran
+ * from `MixpanelProvider` at app start.
+ */
+export function trackWorkItemAdded(payload: TrackWorkItemAddedPayload): void {
+  if (typeof window === "undefined") return;
+  if (!process.env.NEXT_PUBLIC_MIXPANEL_TOKEN) return;
+
+  mixpanel.track("Work Item Added", payload);
+}
+
 export { mixpanel };

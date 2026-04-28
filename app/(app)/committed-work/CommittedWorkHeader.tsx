@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/sheet";
 import { commitWork } from "@/app/(app)/evaluate/actions";
 import { sanitizeHoursInput } from "@/lib/hours";
+import { trackWorkItemAdded } from "@/lib/mixpanel";
 import { CommitmentAllocationFieldset } from "@/components/committed-work/CommitmentAllocationFieldset";
 
 export function CommittedWorkHeader() {
@@ -63,6 +64,13 @@ export function CommittedWorkHeader() {
           startYmd: startDate.trim(),
           deadlineYmd: deadline.trim() || undefined,
           allocationMode,
+        });
+        trackWorkItemAdded({
+          source: "committed_work",
+          estimated_hours: hours,
+          has_deadline: Boolean(deadline.trim()),
+          allocation_mode:
+            allocationMode === "fill_capacity" ? "fill_capacity" : "even",
         });
         setSheetOpen(false);
         router.refresh();
