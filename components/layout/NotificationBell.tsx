@@ -95,7 +95,7 @@ export function NotificationBell({ initialNotifications }: Props) {
           className="absolute right-0 top-10 z-50 w-80 rounded-lg border border-border bg-background shadow-lg overflow-hidden"
         >
           <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-            <span className="text-sm font-semibold">Notifications</span>
+            <span className="text-sm font-medium">Notifications</span>
             {unreadCount > 0 && (
               <span className="text-xs text-muted-foreground">{unreadCount} unread</span>
             )}
@@ -141,7 +141,7 @@ function NotificationCard({
           isUnread ? "bg-rose-50 dark:bg-rose-950/20" : ""
         }`}
       >
-        <p className="text-sm font-semibold flex items-center gap-2">
+        <p className="text-sm font-medium flex items-center gap-2">
           <Circle className="size-2.5 shrink-0 fill-rose-600 stroke-rose-600" />
           {count} project{count !== 1 ? "s" : ""} {count !== 1 ? "are" : "is"} due this week
         </p>
