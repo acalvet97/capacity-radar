@@ -4,7 +4,7 @@ export function PlanningModelSection() {
   return (
     <Card className="rounded-md max-w-2xl">
       <CardHeader>
-        <h2 className="text-base font-semibold">Planning Model</h2>
+        <h2 className="text-base font-medium">Planning Model</h2>
         <p className="text-sm text-muted-foreground mt-1">
           Current deterministic rules used for capacity and exposure.
         </p>

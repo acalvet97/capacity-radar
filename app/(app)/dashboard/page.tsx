@@ -124,7 +124,7 @@ export default async function DashboardPage({
     <div className="mx-auto max-w-6xl w-full py-[52px] px-4 space-y-10">
       <header className="mb-[52px]">
         <div className="flex items-center justify-between mb-2">
-          <h1 className="text-2xl font-semibold tracking-normal">Dashboard</h1>
+          <h1 className="text-2xl font-medium tracking-normal">Dashboard</h1>
           <div className="flex items-center gap-3">
             <span className="text-sm font-medium text-foreground">View:</span>
             <DashboardViewSelector view={view} />
@@ -145,7 +145,7 @@ export default async function DashboardPage({
           <CardContent className="py-0">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
               <div>
-                <div className="text-5xl font-semibold tracking-tight">
+                <div className="text-5xl font-medium tracking-tight">
                   {snapshot.maxUtilizationPct}%
                 </div>
                 <PeakLoadLabel />
@@ -170,7 +170,7 @@ export default async function DashboardPage({
             />
           </CardHeader>
           <CardContent className="space-y-0.5">
-            <div className="text-2xl font-semibold tracking-tight">
+            <div className="text-2xl font-medium tracking-tight">
               {snapshot.totalCommittedHours}h / {snapshot.totalCapacityHours}h
             </div>
           </CardContent>
@@ -185,7 +185,7 @@ export default async function DashboardPage({
             />
           </CardHeader>
           <CardContent className="space-y-0.5">
-            <div className="text-2xl font-semibold tracking-tight">
+            <div className="text-2xl font-medium tracking-tight">
               {freeHoursThisWeek}h
             </div>
             <p className="text-xs text-muted-foreground tabular-nums">
@@ -199,7 +199,7 @@ export default async function DashboardPage({
         <div className="md:col-span-2">
           <Card className="rounded-md">
             <CardHeader>
-              <h2 className="text-base font-semibold">Capacity overview</h2>
+              <h2 className="text-base font-medium">Capacity overview</h2>
             </CardHeader>
             <CardContent className="space-y-4">
               {horizonWeeksForView.map((week) => {
@@ -301,7 +301,7 @@ export default async function DashboardPage({
         <section className="pt-4">
           <Card className="rounded-md">
             <CardHeader>
-              <h2 className="text-base font-semibold">Upcoming deadlines</h2>
+              <h2 className="text-base font-medium">Upcoming deadlines</h2>
               <p className="text-sm text-muted-foreground">
                 Work due in the next 4 weeks
               </p>

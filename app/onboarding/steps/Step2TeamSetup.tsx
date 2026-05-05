@@ -149,7 +149,7 @@ export function Step2TeamSetup({
   return (
     <div className="space-y-8">
       <div className="space-y-1">
-        <h1 className="text-2xl font-semibold tracking-tight">Set up your team</h1>
+        <h1 className="text-2xl font-medium tracking-tight">Set up your team</h1>
         <p className="text-muted-foreground">
           Add your team members and their weekly hours so Klira can calculate capacity.
         </p>
@@ -157,7 +157,7 @@ export function Step2TeamSetup({
 
       {/* Member table */}
       <div className="space-y-3">
-        <h2 className="text-sm font-semibold">Team members</h2>
+        <h2 className="text-sm font-medium">Team members</h2>
         <div className="rounded-md border overflow-hidden">
           <table className="w-full text-sm">
             <thead>
@@ -235,7 +235,7 @@ export function Step2TeamSetup({
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-sm font-semibold">Capacity buffer</h2>
+            <h2 className="text-sm font-medium">Capacity buffer</h2>
             <p className="text-xs text-muted-foreground mt-0.5">
               Hours per week reserved for meetings, admin, and unplanned work.
             </p>
@@ -281,8 +281,8 @@ export function Step2TeamSetup({
         </div>
         <div className="border-t border-border my-1" />
         <div className="flex justify-between">
-          <span className="font-semibold text-foreground">Usable capacity</span>
-          <span className="font-semibold text-foreground">{usableCapacity}h / week</span>
+          <span className="font-medium text-foreground">Usable capacity</span>
+          <span className="font-medium text-foreground">{usableCapacity}h / week</span>
         </div>
       </div>
 

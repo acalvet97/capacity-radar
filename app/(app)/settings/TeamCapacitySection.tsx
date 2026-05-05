@@ -149,7 +149,7 @@ export function TeamCapacitySection({
   return (
     <Card className="rounded-md max-w-2xl">
       <CardHeader>
-        <h2 className="text-base font-semibold">Team Capacity</h2>
+        <h2 className="text-base font-medium">Team Capacity</h2>
         <p className="text-sm text-muted-foreground mt-1">
           Define how much work this team can deliver per week. Stored as a 4-week cycle in the
           database.

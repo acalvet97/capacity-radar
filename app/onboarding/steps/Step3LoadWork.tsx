@@ -129,7 +129,7 @@ export function Step3LoadWork({ teamId: _teamId }: Props) {
     return (
       <div className="space-y-8 text-left">
         <div className="space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight">Load your work</h1>
+          <h1 className="text-2xl font-medium tracking-tight">Load your work</h1>
           <p className="text-muted-foreground">
             Get your team&apos;s current projects into Klira. Choose how you&apos;d like to add them.
           </p>
@@ -201,7 +201,7 @@ export function Step3LoadWork({ teamId: _teamId }: Props) {
     return (
       <div className="space-y-6 text-left">
         <div className="space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight">Describe your work</h1>
+          <h1 className="text-2xl font-medium tracking-tight">Describe your work</h1>
           <p className="text-muted-foreground">
             Write naturally — don&apos;t worry about format.
           </p>
@@ -255,7 +255,7 @@ export function Step3LoadWork({ teamId: _teamId }: Props) {
     return (
       <div className="space-y-6 text-left">
         <div className="space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight">Upload a file</h1>
+          <h1 className="text-2xl font-medium tracking-tight">Upload a file</h1>
           <p className="text-muted-foreground">
             Upload a CSV or Excel file with your projects.
           </p>

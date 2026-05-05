@@ -38,7 +38,7 @@ export function OnboardingWizard({
               <React.Fragment key={label}>
                 <div className="flex flex-col items-center gap-1.5">
                   <div
-                    className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold transition-colors ${
+                    className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-medium transition-colors ${
                       isDone
                         ? "bg-foreground text-background"
                         : isActive

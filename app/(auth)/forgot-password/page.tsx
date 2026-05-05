@@ -35,7 +35,7 @@ export default function ForgotPasswordPage() {
         <CardContent className="pt-6">
           <div className="flex flex-col items-center gap-3 py-4 text-center">
             <MailCheck className="h-10 w-10 text-emerald-500" />
-            <h2 className="text-lg font-semibold">Check your inbox</h2>
+            <h2 className="text-lg font-medium">Check your inbox</h2>
             <p className="text-sm text-muted-foreground">
               If an account exists for that email, we&apos;ve sent a password reset link.
               It may take a minute to arrive.
@@ -55,7 +55,7 @@ export default function ForgotPasswordPage() {
   return (
     <Card className="rounded-md">
       <CardHeader className="pb-4">
-        <h2 className="text-lg font-semibold">Reset your password</h2>
+        <h2 className="text-lg font-medium">Reset your password</h2>
         <p className="text-sm text-muted-foreground">
           Enter your email and we&apos;ll send you a reset link.
         </p>

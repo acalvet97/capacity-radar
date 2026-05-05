@@ -68,7 +68,7 @@ export default function RegisterPage() {
   return (
     <Card className="rounded-md">
       <CardHeader className="pb-4">
-        <h2 className="text-lg font-semibold">Create your account</h2>
+        <h2 className="text-lg font-medium">Create your account</h2>
         <p className="text-sm text-muted-foreground">
           Get started — your workspace setup comes right after.
         </p>

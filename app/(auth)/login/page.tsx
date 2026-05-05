@@ -32,7 +32,7 @@ export default function LoginPage() {
   return (
     <Card className="rounded-md">
       <CardHeader className="pb-4">
-        <h2 className="text-lg font-semibold">Sign in</h2>
+        <h2 className="text-lg font-medium">Sign in</h2>
         <p className="text-sm text-muted-foreground">
           Enter your credentials to access your team.
         </p>

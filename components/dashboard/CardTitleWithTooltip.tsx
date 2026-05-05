@@ -17,7 +17,7 @@ export function CardTitleWithTooltip({
   const content = (
     <div className="flex items-center gap-1.5">
       {Tag === "h2" ? (
-        <h2 className={className ?? "text-base font-semibold"}>{title}</h2>
+        <h2 className={className ?? "text-base font-medium"}>{title}</h2>
       ) : (
         <CardTitle className={className}>{title}</CardTitle>
       )}

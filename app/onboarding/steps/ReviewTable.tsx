@@ -156,7 +156,7 @@ export function ReviewTable({ items: initialItems, importSource, onBack }: Props
   return (
     <div className="space-y-5 text-left">
       <div className="space-y-1">
-        <h2 className="text-lg font-semibold">Review your projects</h2>
+        <h2 className="text-lg font-medium">Review your projects</h2>
         <p className="text-sm text-muted-foreground">
           Edit any field inline, remove rows you don&apos;t need, or add missing ones.
         </p>

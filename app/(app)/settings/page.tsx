@@ -25,7 +25,7 @@ export default async function SettingsPage() {
   return (
     <div className="mx-auto max-w-6xl w-full py-[52px] px-4 space-y-10">
       <header className="mb-10">
-        <h1 className="text-2xl font-semibold tracking-normal">Settings</h1>
+        <h1 className="text-2xl font-medium tracking-normal">Settings</h1>
       </header>
 
       <section className="space-y-8">

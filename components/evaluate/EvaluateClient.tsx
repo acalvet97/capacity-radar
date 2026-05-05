@@ -360,7 +360,7 @@ function ResultCard({
       style={{ opacity }}
     >
       <div className="flex items-center justify-between">
-        <span className={`flex items-center gap-1.5 font-semibold ${fits ? "text-green-600" : "text-rose-600"}`}>
+        <span className={`flex items-center gap-1.5 font-medium ${fits ? "text-green-600" : "text-rose-600"}`}>
           {fits ? <Check className="size-4 shrink-0" /> : <X className="size-4 shrink-0" />}
           {fits ? "Fits within capacity" : "Exceeds capacity"}
         </span>

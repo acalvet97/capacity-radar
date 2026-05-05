@@ -51,7 +51,7 @@ function SectionCard({
       }`}
     >
       <div>
-        <h2 className="text-base font-semibold">{title}</h2>
+        <h2 className="text-base font-medium">{title}</h2>
         {description && (
           <p className="text-sm text-muted-foreground mt-0.5">{description}</p>
         )}
@@ -415,7 +415,7 @@ function DangerZoneSection({ email }: { email: string }) {
   return (
     <div className="rounded-lg border border-destructive/40 bg-card p-6 space-y-4">
       <div>
-        <h2 className="text-base font-semibold text-destructive">Danger zone</h2>
+        <h2 className="text-base font-medium text-destructive">Danger zone</h2>
         <p className="text-sm text-muted-foreground mt-0.5">
           Irreversible actions — proceed with caution.
         </p>
@@ -470,7 +470,7 @@ export function AccountClient({ displayName, email, teamName, teamId }: AccountC
   return (
     <div className="mx-auto max-w-2xl w-full py-[52px] px-4 space-y-6">
       <header className="mb-8">
-        <h1 className="text-2xl font-semibold tracking-normal">Account</h1>
+        <h1 className="text-2xl font-medium tracking-normal">Account</h1>
         <p className="text-sm text-muted-foreground mt-1">
           Manage your profile, security, and team settings.
         </p>

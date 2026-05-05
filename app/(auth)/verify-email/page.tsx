@@ -48,7 +48,7 @@ function VerifyEmailContent() {
       <CardContent className="pt-6">
         <div className="flex flex-col items-center gap-3 py-4 text-center">
           <MailCheck className="h-10 w-10 text-emerald-500" />
-          <h2 className="text-lg font-semibold">Check your inbox</h2>
+          <h2 className="text-lg font-medium">Check your inbox</h2>
           <p className="text-sm text-muted-foreground">
             We sent a confirmation link to{' '}
             <span className="font-medium text-foreground">{email}</span>.

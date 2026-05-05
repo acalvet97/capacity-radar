@@ -84,7 +84,7 @@ export function CommittedWorkHeader() {
     <>
       <header className="mb-8 flex flex-row items-end justify-between gap-6 border-b border-border pb-6">
         <div>
-          <h1 className="text-2xl font-semibold tracking-normal">
+          <h1 className="text-2xl font-medium tracking-normal">
             Committed Work
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">

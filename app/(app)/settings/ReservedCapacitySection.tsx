@@ -101,7 +101,7 @@ export function ReservedCapacitySection({
     <Card className="rounded-md max-w-2xl">
       <CardHeader className="flex flex-row items-start justify-between gap-4">
         <div>
-          <h2 className="text-base font-semibold">Reserved Capacity</h2>
+          <h2 className="text-base font-medium">Reserved Capacity</h2>
           <p className="text-sm text-muted-foreground mt-1">
             Weekly hours set aside for meetings, admin and unplanned work. These hours reduce
             available capacity.

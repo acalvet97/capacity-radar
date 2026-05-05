@@ -80,7 +80,7 @@ export default function ResetPasswordPage() {
   return (
     <Card className="rounded-md">
       <CardHeader className="pb-4">
-        <h2 className="text-lg font-semibold">Set a new password</h2>
+        <h2 className="text-lg font-medium">Set a new password</h2>
         <p className="text-sm text-muted-foreground">
           Choose a strong password for your account.
         </p>
