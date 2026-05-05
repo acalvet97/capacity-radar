@@ -17,13 +17,13 @@ import {
 } from "@/components/ui/sidebar";
 
 function useShortcutLabel() {
-  if (typeof navigator === "undefined") return "⌘K";
+  if (typeof navigator === "undefined") return "⌘ + K";
   // userAgentData.platform is the modern API; navigator.platform is the
   // widely-supported fallback (deprecated but not yet removed anywhere relevant).
   const platform =
     (navigator as Navigator & { userAgentData?: { platform?: string } })
       .userAgentData?.platform ?? navigator.platform;
-  return platform.toUpperCase().includes("MAC") ? "⌘K" : "Ctrl+K";
+  return platform.toUpperCase().includes("MAC") ? "⌘ + K" : "Ctrl + K";
 }
 
 const dataNavItems = [
@@ -90,7 +90,7 @@ export function AppSidebar({ user }: { user: NavUserData }) {
                       <Sparkle className="size-4 shrink-0" />
                       <span>Ask Klira</span>
                     </span>
-                    <span className="text-[10px] text-muted-foreground/60 font-mono shrink-0 ml-2">
+                    <span className="ml-2 shrink-0 text-sm text-muted-foreground/60 tabular-nums">
                       {shortcutLabel}
                     </span>
                   </Link>

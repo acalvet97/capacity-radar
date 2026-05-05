@@ -95,11 +95,13 @@ export function AskKliraModal({
           </div>
         </div>
 
-        <EvaluateClient
-          snapshot={snapshot}
-          todayYmd={todayYmd}
-          displayName={displayName}
-        />
+        <div className="flex min-h-0 flex-1 flex-col">
+          <EvaluateClient
+            snapshot={snapshot}
+            todayYmd={todayYmd}
+            displayName={displayName}
+          />
+        </div>
       </div>
     </div>
   );

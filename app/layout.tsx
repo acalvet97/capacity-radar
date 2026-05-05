@@ -1,15 +1,8 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
 import "./globals.css";
 import { MixpanelProvider } from "@/components/mixpanel-provider";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-
-const inter = Inter({
-  variable: "--font-inter",
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-});
 
 export const metadata: Metadata = {
   title: {
@@ -25,7 +18,10 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className={`${inter.variable} min-h-screen bg-background antialiased font-sans`}>
+      <head>
+        <link rel="stylesheet" href="https://use.typekit.net/ecz5qed.css" />
+      </head>
+      <body className="min-h-screen bg-background antialiased font-sans">
         <MixpanelProvider>
           <TooltipProvider>
             {children}

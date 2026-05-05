@@ -1337,7 +1337,7 @@ export function EvaluateClient({
                   const Icon = PROMPT_ICON_MAP[msg.promptIconName];
                   return (
                     <div key={i} className="flex justify-end">
-                      <div className="bg-muted rounded-2xl rounded-tr-sm px-3 py-2.5 max-w-[75%] text-sm">
+                      <div className="bg-muted rounded-2xl rounded-tr-sm px-3 py-2.5 max-w-[75%] text-base">
                         <div className="flex items-center gap-2 border border-border/60 rounded-lg px-3 py-1.5 bg-background/60">
                           {Icon && <Icon className="size-3.5 shrink-0 text-muted-foreground" />}
                           <span className="text-foreground">{msg.content}</span>
@@ -1348,7 +1348,7 @@ export function EvaluateClient({
                 }
                 return (
                   <div key={i} className="flex justify-end">
-                    <div className="bg-primary text-primary-foreground rounded-2xl rounded-tr-sm px-4 py-2.5 max-w-[75%] text-sm whitespace-pre-wrap">
+                    <div className="bg-primary text-primary-foreground rounded-2xl rounded-tr-sm px-4 py-2.5 max-w-[75%] text-base whitespace-pre-wrap">
                       {msg.content}
                     </div>
                   </div>
@@ -1358,7 +1358,7 @@ export function EvaluateClient({
               if (msg.isPostCommit && msg.postCommitWorkName) {
                 const workName = msg.postCommitWorkName;
                 return (
-                  <div key={i} className="space-y-4 text-sm">
+                  <div key={i} className="space-y-4 text-base">
                     <div className="space-y-4">
                       <p className="text-foreground leading-relaxed">
                         {workName} has been added to your team&apos;s committed work.
@@ -1381,7 +1381,7 @@ export function EvaluateClient({
               }
 
               return (
-                <div key={i} className="space-y-4 text-sm">
+                <div key={i} className="space-y-4 text-base">
                   <div className="space-y-4">
                     {(msg.content || msg.isStreaming) ? (
                       <p className="whitespace-pre-wrap text-foreground leading-relaxed">

@@ -53,7 +53,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   }
 
   return (
-    <SidebarProvider>
+    <SidebarProvider className="h-svh min-h-0 overflow-hidden">
       <AppSidebar
         user={{
           name: displayName,
@@ -61,9 +61,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           avatar,
         }}
       />
-      <SidebarInset className="ml-[16rem] flex flex-col">
+      <SidebarInset className="ml-[16rem] flex min-h-0 flex-1 flex-col overflow-hidden">
         <TopBar />
-        <main className="flex min-h-0 flex-1 flex-col">
+        <main className="flex min-h-0 flex-1 flex-col overflow-y-auto">
           <AskKliraProvider
             snapshot={snapshot}
             todayYmd={todayYmd}
