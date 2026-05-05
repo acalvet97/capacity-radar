@@ -6,7 +6,7 @@ import type { Metadata } from "next";
 export const metadata: Metadata = { title: "Evaluate" };
 
 import { EvaluateClient } from "@/components/evaluate/EvaluateClient";
-import { getDashboardSnapshotFromDb } from "@/lib/dashboardEngine";
+import { getDefaultDashboardSnapshot } from "@/lib/dashboardEngine";
 import { DEFAULT_TZ, todayYmdInTz } from "@/lib/dates";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { getTeamIdForUser } from "@/lib/db/getTeamIdForUser";
@@ -27,13 +27,7 @@ export default async function EvaluatePage() {
 
   const todayYmd = todayYmdInTz(DEFAULT_TZ);
 
-  const snapshot = await getDashboardSnapshotFromDb(teamId, {
-    startYmd: todayYmd,
-    weeks: 26,
-    maxWeeks: 26,
-    locale: "en-GB",
-    tz: DEFAULT_TZ,
-  });
+  const snapshot = await getDefaultDashboardSnapshot(teamId, todayYmd);
 
   return (
     <div className="flex h-full min-h-0 min-w-0 w-full flex-col overflow-hidden pb-4 pt-0">

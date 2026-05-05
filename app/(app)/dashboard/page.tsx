@@ -8,7 +8,7 @@ export const metadata: Metadata = { title: "Dashboard" };
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { WorkItemsTable } from "@/components/work-items/WorkItemsTable";
-import { getDashboardSnapshotFromDb, exposureBucketFromUtilization } from "@/lib/dashboardEngine";
+import { getDefaultDashboardSnapshot, exposureBucketFromUtilization } from "@/lib/dashboardEngine";
 import { recomputeSnapshot } from "@/lib/evaluateEngine";
 import { getWorkItemsForTeam } from "@/lib/db/getWorkItemsForTeam";
 import { getTeamIdForUser } from "@/lib/db/getTeamIdForUser";
@@ -50,13 +50,7 @@ export default async function DashboardPage({
   checkAndCreateStalenessNotification(teamId).catch(() => {});
 
   const [fullSnapshot, workItems] = await Promise.all([
-    getDashboardSnapshotFromDb(teamId, {
-      startYmd: todayYmd,
-      weeks: 26,
-      maxWeeks: 26,
-      locale: "en-GB",
-      tz: DEFAULT_TZ,
-    }),
+    getDefaultDashboardSnapshot(teamId, todayYmd),
     getWorkItemsForTeam(teamId),
   ]);
 

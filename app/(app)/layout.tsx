@@ -5,7 +5,7 @@ import { supabaseServer } from "@/lib/supabaseServer";
 import { getTeamRowForOwnerAdmin } from "@/lib/db/ensurePersonalTeamForUser";
 import { redirect } from "next/navigation";
 import { AskKliraProvider } from "@/context/AskKliraContext";
-import { getDashboardSnapshotFromDb } from "@/lib/dashboardEngine";
+import { getDefaultDashboardSnapshot } from "@/lib/dashboardEngine";
 import { DEFAULT_TZ, todayYmdInTz } from "@/lib/dates";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -37,13 +37,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   let snapshot;
   if (teamIdForSnapshot) {
     try {
-      snapshot = await getDashboardSnapshotFromDb(teamIdForSnapshot, {
-        startYmd: todayYmd,
-        weeks: 26,
-        maxWeeks: 26,
-        locale: "en-GB",
-        tz: DEFAULT_TZ,
-      });
+      snapshot = await getDefaultDashboardSnapshot(teamIdForSnapshot, todayYmd);
     } catch {
       // If snapshot fetch fails (e.g. during onboarding), render layout without modal
       snapshot = null;

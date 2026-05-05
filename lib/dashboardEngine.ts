@@ -1,4 +1,5 @@
 // lib/dashboardEngine.ts
+import { cache } from "react";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { getTeamIdForUser } from "@/lib/db/getTeamIdForUser";
 import {
@@ -115,16 +116,6 @@ export async function getDashboardSnapshotFromDb(
 
   const supabase = supabaseAdmin();
 
-  const { data: teamRow, error: teamErr } = await supabase
-    .from("teams")
-    .select("id, buffer_hours_per_week")
-    .eq("id", teamId)
-    .single();
-
-  if (teamErr) throw new Error(teamErr.message);
-
-  const bufferHoursPerWeek = Math.max(0, Number(teamRow?.buffer_hours_per_week ?? 0) || 0);
-
   const tz = options.tz ?? DEFAULT_TZ;
   const locale = options.locale ?? "en-GB";
 
@@ -138,15 +129,31 @@ export async function getDashboardSnapshotFromDb(
 
   const startYmd = (options.startYmd ?? todayYmdInTz(tz)).trim();
 
+  // Fetch all three independent queries in parallel
+  const [teamResult, membersResult, workItemsResult] = await Promise.all([
+    supabase
+      .from("teams")
+      .select("id, buffer_hours_per_week")
+      .eq("id", teamId)
+      .single(),
+    supabase
+      .from("team_members")
+      .select("hours_per_cycle")
+      .eq("team_id", teamId),
+    supabase
+      .from("work_items")
+      .select("estimated_hours, start_date, deadline")
+      .eq("team_id", teamId),
+  ]);
+
+  if (teamResult.error) throw new Error(teamResult.error.message);
+  if (membersResult.error) throw new Error(membersResult.error.message);
+  if (workItemsResult.error) throw new Error(workItemsResult.error.message);
+
+  const bufferHoursPerWeek = Math.max(0, Number(teamResult.data?.buffer_hours_per_week ?? 0) || 0);
+
   // 1) Weekly capacity from members (canonical unit)
-  const { data: members, error: memErr } = await supabase
-    .from("team_members")
-    .select("hours_per_cycle")
-    .eq("team_id", teamId);
-
-  if (memErr) throw new Error(memErr.message);
-
-  const totalWeekly = getTotalWeeklyCapacityFromMembers(members ?? []);
+  const totalWeekly = getTotalWeeklyCapacityFromMembers(membersResult.data ?? []);
   const reservedEnabled = bufferHoursPerWeek > 0;
   const weeklyAvailable = getWeeklyAvailableCapacity(
     totalWeekly,
@@ -162,13 +169,7 @@ export async function getDashboardSnapshotFromDb(
     locale,
   });
 
-  // 3) Load work items
-  const { data: workItems, error: wiErr } = await supabase
-    .from("work_items")
-    .select("estimated_hours, start_date, deadline")
-    .eq("team_id", teamId);
-
-  if (wiErr) throw new Error(wiErr.message);
+  const workItems = workItemsResult.data;
 
   // 4) Distribute work into horizon buckets (uniform per week)
   const horizonStartDate = ymdToUtcDate(horizonWeeks[0].weekStartYmd);
@@ -257,3 +258,19 @@ export async function getDashboardSnapshotFromDb(
     bufferHoursPerWeek,
   };
 }
+
+/**
+ * Cached wrapper around the standard 26-week snapshot used by layout, dashboard, and evaluate.
+ * React.cache deduplicates calls with the same (teamId, todayYmd) within a single server render,
+ * so layout + page share one DB execution instead of running the 3 queries twice.
+ */
+export const getDefaultDashboardSnapshot = cache(
+  (teamId: string, todayYmd: string): Promise<DashboardSnapshot> =>
+    getDashboardSnapshotFromDb(teamId, {
+      startYmd: todayYmd,
+      weeks: 26,
+      maxWeeks: 26,
+      locale: "en-GB",
+      tz: DEFAULT_TZ,
+    })
+);
