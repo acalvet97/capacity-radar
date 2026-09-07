@@ -2,6 +2,7 @@
 
 import { supabaseServer } from '@/lib/supabaseServer';
 import { ensurePersonalTeamForUser } from '@/lib/db/ensurePersonalTeamForUser';
+import { getAppUrl } from '@/lib/appUrl';
 import { redirect } from 'next/navigation';
 
 export async function register(formData: FormData) {
@@ -16,12 +17,13 @@ export async function register(formData: FormData) {
   }
 
   const supabase = await supabaseServer();
+  const appUrl = await getAppUrl();
 
   const { data: signUpData, error: authError } = await supabase.auth.signUp({
     email,
     password,
     options: {
-      emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback`,
+      emailRedirectTo: `${appUrl}/auth/callback`,
     },
   });
   if (authError) throw new Error(authError.message);
@@ -65,8 +67,9 @@ export async function requestPasswordReset(formData: FormData) {
   const email = formData.get('email') as string;
   if (!email) throw new Error('Email is required.');
   const supabase = await supabaseServer();
+  const appUrl = await getAppUrl();
   await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/reset-password`,
+    redirectTo: `${appUrl}/reset-password`,
   });
   // No error thrown regardless of result — prevents email enumeration
 }
