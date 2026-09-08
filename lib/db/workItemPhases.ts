@@ -1,10 +1,9 @@
 /**
  * A named stage of a work item, with its own owner, deadline and hours.
  *
- * Phases are optional: a work item with none keeps its single manual estimate.
- * When phases exist, `work_items.estimated_hours` is their sum, kept in sync by
- * the phase RPCs (see the add_work_item_phases migration) rather than here, so
- * the value the capacity engine reads can never drift from the phase rows.
+ * Phases carry owner, dates, and hours. A work item with none is a stub
+ * (name-only create) until the first phase is saved. When phases exist,
+ * `work_items.estimated_hours` is their sum, kept in sync by the phase RPCs.
  */
 export type WorkItemPhaseRow = {
   id: string;
@@ -25,8 +24,8 @@ export const WORK_ITEM_PHASE_COLUMNS =
 
 /**
  * Owner is required in the UI so the allocation preview has a real daily cap.
- * Capacity evaluation still stays team-level until the engine consumes this
- * curve; a missing owner (cascade) just hides the preview.
+ * Capacity stacking consumes this curve at read time. A missing owner
+ * (cascade) just hides the allocation preview and contributes 0 hours.
  */
 export function phaseOwnerName(
   phase: WorkItemPhaseRow,

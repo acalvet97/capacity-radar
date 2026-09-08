@@ -15,8 +15,8 @@ export type WorkItemRow = {
   created_at: string;
   allocation_mode?: "even" | "fill_capacity" | null;
   /**
-   * Ordered by sort_order. Empty for work items that still use a single manual
-   * estimate; when non-empty, estimated_hours is the sum of these.
+   * Ordered by sort_order. Empty while the work item is a stub awaiting its
+   * first phase; when non-empty, estimated_hours is the sum of these.
    */
   phases: WorkItemPhaseRow[];
 };

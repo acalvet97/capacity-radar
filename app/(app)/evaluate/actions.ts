@@ -5,36 +5,28 @@ import { revalidatePath } from "next/cache";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { getTeamIdForUser } from "@/lib/db/getTeamIdForUser";
 import { isValidYmd } from "@/lib/dates";
-import { sanitizeHoursInput } from "@/lib/hours";
 
 export type CommitWorkInput = {
   name: string;
-  totalHours: number;
-  startYmd: string;      // "YYYY-MM-DD"
-  deadlineYmd?: string;  // "YYYY-MM-DD" | undefined
-  allocationMode?: "even" | "fill_capacity"; // Defaults to "even"
+  startYmd?: string;
+  deadlineYmd?: string;
 };
 
 export async function commitWork(input: CommitWorkInput) {
   const name = input.name?.trim() ?? "";
   if (!name) throw new Error("Work name is required.");
 
-  const totalHours = sanitizeHoursInput(input.totalHours);
-  if (totalHours <= 0) {
-    throw new Error("Total hours must be > 0.");
-  }
-
   const startYmd = (input.startYmd ?? "").trim();
-  if (!isValidYmd(startYmd)) {
+  if (startYmd && !isValidYmd(startYmd)) {
     throw new Error("startYmd must be a valid date in YYYY-MM-DD format.");
   }
 
   const deadlineYmd = (input.deadlineYmd ?? "").trim() || undefined;
   if (deadlineYmd && !isValidYmd(deadlineYmd)) {
-    throw new Error("deadlineYmd must be a valid date in YYYY-MM-DD format.");
+    throw new Error("Deadline must be a valid date in YYYY-MM-DD format.");
   }
 
-  if (deadlineYmd && deadlineYmd < startYmd) {
+  if (startYmd && deadlineYmd && deadlineYmd < startYmd) {
     throw new Error("Deadline cannot be before start date.");
   }
 
@@ -44,10 +36,10 @@ export async function commitWork(input: CommitWorkInput) {
   const payload = {
     team_id: teamId,
     name,
-    estimated_hours: totalHours,
-    start_date: startYmd,
+    estimated_hours: 0,
+    start_date: startYmd || null,
     deadline: deadlineYmd ?? null,
-    allocation_mode: input.allocationMode ?? "even",
+    allocation_mode: "even" as const,
   };
 
   const { data, error } = await supabase
@@ -60,5 +52,6 @@ export async function commitWork(input: CommitWorkInput) {
 
   revalidatePath("/committed-work");
   revalidatePath("/dashboard");
+  revalidatePath("/evaluate");
   return { id: data.id };
 }

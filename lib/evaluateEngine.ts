@@ -2,6 +2,19 @@
 import type { DashboardSnapshot, WeekSnapshot } from "@/lib/dashboardEngine";
 import { exposureBucketFromUtilization } from "@/lib/dashboardConstants";
 import { clamp, round1 } from "@/lib/utils";
+import type { TeamMemberRow } from "@/lib/db/getTeamMembers";
+import type { WorkItemRow } from "@/lib/db/getWorkItemsForTeam";
+import {
+  eachYmdInRange,
+  getMemberRemainingInRange,
+  getStackedDailyHours,
+  getTeamRemainingInRange,
+  remainingHoursOnDay,
+  spanDaysInclusive,
+  type DateRange,
+  type StackedHours,
+} from "@/lib/capacityStacking";
+import { sanitizeHoursInputAllowZero } from "@/lib/hours";
 
 export type AllocationMode = "even" | "fill_capacity";
 
@@ -10,7 +23,18 @@ export type NewWorkInput = {
   totalHours: number;
   startYmd: string;      // "YYYY-MM-DD"
   deadlineYmd?: string;  // "YYYY-MM-DD" (optional)
-  allocationMode?: AllocationMode; // Defaults to "even"
+  allocationMode?: AllocationMode; // Unused by stacking; kept for commit-card compatibility
+};
+
+export type MemberRemainingInsight = {
+  memberId: string;
+  name: string;
+  remainingHours: number;
+};
+
+export type StackingContext = {
+  members: TeamMemberRow[];
+  workItems: WorkItemRow[];
 };
 
 export type EvaluateResult = {
@@ -24,18 +48,16 @@ export type EvaluateResult = {
   applied: {
     weeksCount: number;
     perWeekHours: number;
-    weekRangeLabel: string; // e.g. "2026-02-16 → 2026-03-08"
+    weekRangeLabel: string;
     startIdx: number;
     endIdx: number;
     allocationMode: AllocationMode;
   };
+  teamRemainingHours: number;
+  requestedHours: number;
+  memberRemainings: MemberRemainingInsight[];
 };
 
-/**
- * Map a YYYY-MM-DD date into a week bucket index.
- * Uses string compare because YYYY-MM-DD sorts lexicographically.
- * If outside horizon, clamps to first/last bucket.
- */
 function weekIndexForYmd(horizonWeeks: WeekSnapshot[], ymd: string): number {
   if (!horizonWeeks.length) return 0;
 
@@ -48,95 +70,139 @@ function weekIndexForYmd(horizonWeeks: WeekSnapshot[], ymd: string): number {
   return horizonWeeks.length - 1;
 }
 
-/**
- * Apply new work using the selected allocation mode.
- * - "even": Distribute hours uniformly across weeks
- * - "fill_capacity": Fill available capacity up to 100% per week, then distribute remainder evenly
- */
-export function applyWorkToHorizon(
-  horizonWeeks: WeekSnapshot[],
-  input: NewWorkInput
-): WeekSnapshot[] {
-  if (!horizonWeeks.length) return horizonWeeks;
-
-  const mode = input.allocationMode ?? "even";
-
-  const startIdx = clamp(
-    weekIndexForYmd(horizonWeeks, input.startYmd),
-    0,
-    horizonWeeks.length - 1
-  );
-
-  const endIdxRaw =
+function spanForInput(
+  input: NewWorkInput,
+  horizonWeeks: WeekSnapshot[]
+): DateRange {
+  const start = input.startYmd;
+  const fallbackEnd =
+    horizonWeeks[horizonWeeks.length - 1]?.weekEndYmd ?? start;
+  const end =
     typeof input.deadlineYmd === "string" && input.deadlineYmd.length
-      ? weekIndexForYmd(horizonWeeks, input.deadlineYmd)
-      : horizonWeeks.length - 1;
+      ? input.deadlineYmd
+      : fallbackEnd;
+  if (end < start) return { start, end: start };
+  return { start, end };
+}
 
-  const endIdx = clamp(endIdxRaw, startIdx, horizonWeeks.length - 1);
-
-  if (mode === "even") {
-    // Even distribution (baseline)
-    const weeksCount = endIdx - startIdx + 1;
-    const perWeek = input.totalHours / weeksCount;
-
-    return horizonWeeks.map((w, idx) => {
-      if (idx < startIdx || idx > endIdx) return w;
-      return {
-        ...w,
-        committedHours: round1(w.committedHours + perWeek),
-      };
-    });
-  } else {
-    // Fill available capacity (cap at 100%)
-    const result = [...horizonWeeks];
-    let remainingHours = input.totalHours;
-
-    // First pass: fill each week up to capacity
-    for (let i = startIdx; i <= endIdx && remainingHours > 0; i++) {
-      const week = result[i];
-      const availableCapacity = Math.max(0, week.capacityHours - week.committedHours);
-      const hoursToAdd = Math.min(remainingHours, availableCapacity);
-      
-      if (hoursToAdd > 0) {
-        result[i] = {
-          ...week,
-          committedHours: round1(week.committedHours + hoursToAdd),
-        };
-        remainingHours -= hoursToAdd;
-      }
-    }
-
-    // Second pass: distribute any remaining hours evenly
-    if (remainingHours > 0) {
-      const weeksCount = endIdx - startIdx + 1;
-      const perWeek = remainingHours / weeksCount;
-
-      for (let i = startIdx; i <= endIdx; i++) {
-        result[i] = {
-          ...result[i],
-          committedHours: round1(result[i].committedHours + perWeek),
-        };
-      }
-    }
-
-    return result;
+function stackedByMember(
+  members: TeamMemberRow[],
+  workItems: WorkItemRow[],
+  range: DateRange
+): Map<string, StackedHours> {
+  const map = new Map<string, StackedHours>();
+  for (const member of members) {
+    map.set(
+      member.id,
+      getStackedDailyHours({
+        memberId: member.id,
+        range,
+        workItems,
+        members,
+      })
+    );
   }
+  return map;
+}
+
+export function memberRemainingsForRange(
+  members: TeamMemberRow[],
+  workItems: WorkItemRow[],
+  range: DateRange
+): MemberRemainingInsight[] {
+  const stacked = stackedByMember(members, workItems, range);
+  return memberInsights(members, stacked, range);
+}
+
+function memberInsights(
+  members: TeamMemberRow[],
+  stacked: Map<string, StackedHours>,
+  range: DateRange
+): MemberRemainingInsight[] {
+  return members
+    .map((member) => ({
+      memberId: member.id,
+      name: member.name?.trim() || "Unnamed member",
+      remainingHours: getMemberRemainingInRange({
+        range,
+        stackedHours: stacked.get(member.id) ?? {},
+        dailyHours: member.daily_hours,
+      }),
+    }))
+    .sort((a, b) => b.remainingHours - a.remainingHours);
+}
+
+function teamRemainingOnDate(
+  date: string,
+  members: TeamMemberRow[],
+  stacked: Map<string, StackedHours>
+): number {
+  let remaining = 0;
+  for (const member of members) {
+    remaining += remainingHoursOnDay(
+      date,
+      stacked.get(member.id) ?? {},
+      member.daily_hours
+    );
+  }
+  return remaining;
 }
 
 /**
- * Recompute snapshot KPIs from a modified horizon.
- * Note: totalCapacityHours here is the sum of bucket capacities in the *current view*
- * (which matches the updated dashboardEngine behavior for variable horizons).
+ * Approximate overlay: front-load hypothetical hours into leftover team
+ * capacity day by day. Leftover after the span is dumped on the last week
+ * so the result card can still show over-capacity.
  */
+function applyHypotheticalToHorizon(
+  horizonWeeks: WeekSnapshot[],
+  input: NewWorkInput,
+  members: TeamMemberRow[],
+  stacked: Map<string, StackedHours>,
+  range: DateRange
+): WeekSnapshot[] {
+  if (!horizonWeeks.length) return horizonWeeks;
+
+  const after = horizonWeeks.map((w) => ({ ...w }));
+  let remaining = sanitizeHoursInputAllowZero(input.totalHours);
+
+  for (const date of eachYmdInRange(range.start, range.end)) {
+    if (remaining <= 0) break;
+    const slack = teamRemainingOnDate(date, members, stacked);
+    const hours = Math.min(remaining, slack);
+    if (hours <= 0) continue;
+    const idx = weekIndexForYmd(after, date);
+    after[idx] = {
+      ...after[idx],
+      committedHours: round1(after[idx].committedHours + hours),
+    };
+    remaining = sanitizeHoursInputAllowZero(remaining - hours);
+  }
+
+  if (remaining > 0) {
+    const lastIdx = weekIndexForYmd(after, range.end);
+    after[lastIdx] = {
+      ...after[lastIdx],
+      committedHours: round1(after[lastIdx].committedHours + remaining),
+    };
+  }
+
+  return after;
+}
+
 export function recomputeSnapshot(
   base: DashboardSnapshot,
   newHorizon: WeekSnapshot[]
 ): DashboardSnapshot {
-  const totalCommittedHours = Math.round(newHorizon.reduce((a, w) => a + w.committedHours, 0));
-  const totalCapacityHours = Math.round(newHorizon.reduce((a, w) => a + w.capacityHours, 0));
+  const totalCommittedHours = Math.round(
+    newHorizon.reduce((a, w) => a + w.committedHours, 0)
+  );
+  const totalCapacityHours = Math.round(
+    newHorizon.reduce((a, w) => a + w.capacityHours, 0)
+  );
 
   const maxUtilizationPct = Math.round(
     Math.max(
+      0,
       ...newHorizon.map((w) =>
         w.capacityHours > 0 ? (w.committedHours / w.capacityHours) * 100 : 0
       )
@@ -144,10 +210,10 @@ export function recomputeSnapshot(
   );
 
   const overallUtilizationPct =
-    totalCapacityHours > 0 ? Math.round((totalCommittedHours / totalCapacityHours) * 100) : 0;
+    totalCapacityHours > 0
+      ? Math.round((totalCommittedHours / totalCapacityHours) * 100)
+      : 0;
 
-  // Keep weeksEquivalent definition consistent:
-  // committed hours divided by one-week capacity (assumes stable weekly capacity).
   const weeklyCapacity = newHorizon[0]?.capacityHours || 1;
   const weeksEquivalent = round1(totalCommittedHours / weeklyCapacity);
 
@@ -163,18 +229,15 @@ export function recomputeSnapshot(
   };
 }
 
-/** True if no week exceeds 100% utilization. */
+/** True if requested hours fit in reserved-adjusted team remaining. */
 export function fitsWithinCapacity(result: EvaluateResult): boolean {
-  return result.after.maxUtilizationPct <= 100;
+  return result.requestedHours <= result.teamRemainingHours;
 }
 
-/**
- * Earliest week-end date (YYYY-MM-DD) at or after the current deadline span
- * where this work fits without exceeding 100% in any week. Null if no extension within horizon.
- */
 export function findMinimumDeadlineYmdForFit(
   snapshot: DashboardSnapshot,
-  input: NewWorkInput
+  input: NewWorkInput,
+  stacking: StackingContext
 ): string | null {
   const startIdx = clamp(
     weekIndexForYmd(snapshot.horizonWeeks, input.startYmd),
@@ -189,18 +252,20 @@ export function findMinimumDeadlineYmdForFit(
 
   for (; endIdx < snapshot.horizonWeeks.length; endIdx++) {
     const deadlineYmd = snapshot.horizonWeeks[endIdx].weekEndYmd;
-    const res = evaluateNewWork(snapshot, { ...input, deadlineYmd });
+    const res = evaluateNewWork(
+      snapshot,
+      { ...input, deadlineYmd },
+      stacking
+    );
     if (fitsWithinCapacity(res)) return deadlineYmd;
   }
   return null;
 }
 
-/**
- * Maximum total hours that fit at the given start/deadline/allocation without exceeding 100%.
- */
 export function findMaximumHoursForDeadline(
   snapshot: DashboardSnapshot,
   input: NewWorkInput,
+  stacking: StackingContext,
   opts?: { maxIterations?: number }
 ): number {
   const maxIter = opts?.maxIterations ?? 40;
@@ -210,7 +275,11 @@ export function findMaximumHoursForDeadline(
 
   for (let i = 0; i < maxIter && hi - lo > 0.25; i++) {
     const mid = round1((lo + hi) / 2);
-    const res = evaluateNewWork(snapshot, { ...input, totalHours: mid });
+    const res = evaluateNewWork(
+      snapshot,
+      { ...input, totalHours: mid },
+      stacking
+    );
     if (fitsWithinCapacity(res)) {
       best = mid;
       lo = mid;
@@ -222,45 +291,49 @@ export function findMaximumHoursForDeadline(
 }
 
 export type OverCapacityScenario = {
-  id: "extend_deadline" | "reduce_scope" | "switch_allocation";
+  id: "extend_deadline" | "reduce_scope";
   title: string;
   description: string;
   evaluation: EvaluateResult;
-  /** Values to apply to the form to preview this scenario. */
   apply: {
     deadlineYmd?: string;
     totalHours?: number;
-    allocationMode?: AllocationMode;
   };
 };
 
-/**
- * Up to three deterministic alternatives when the baseline evaluation exceeds capacity.
- */
 export function buildOverCapacityScenarios(
   snapshot: DashboardSnapshot,
-  input: NewWorkInput
+  input: NewWorkInput,
+  stacking: StackingContext
 ): OverCapacityScenario[] {
-  const baseline = evaluateNewWork(snapshot, input);
+  const baseline = evaluateNewWork(snapshot, input, stacking);
   if (fitsWithinCapacity(baseline)) return [];
 
   const out: OverCapacityScenario[] = [];
 
-  const extended = findMinimumDeadlineYmdForFit(snapshot, input);
+  const extended = findMinimumDeadlineYmdForFit(snapshot, input, stacking);
   if (extended) {
-    const ev = evaluateNewWork(snapshot, { ...input, deadlineYmd: extended });
+    const ev = evaluateNewWork(
+      snapshot,
+      { ...input, deadlineYmd: extended },
+      stacking
+    );
     out.push({
       id: "extend_deadline",
       title: "Extend deadline",
-      description: `Push deadline to ${extended} so the work fits within weekly capacity.`,
+      description: `Push deadline to ${extended} so the work fits within remaining team capacity.`,
       evaluation: ev,
       apply: { deadlineYmd: extended },
     });
   }
 
-  const maxHours = findMaximumHoursForDeadline(snapshot, input);
+  const maxHours = findMaximumHoursForDeadline(snapshot, input, stacking);
   if (maxHours > 0 && maxHours < input.totalHours) {
-    const ev = evaluateNewWork(snapshot, { ...input, totalHours: maxHours });
+    const ev = evaluateNewWork(
+      snapshot,
+      { ...input, totalHours: maxHours },
+      stacking
+    );
     out.push({
       id: "reduce_scope",
       title: "Reduce scope",
@@ -270,37 +343,41 @@ export function buildOverCapacityScenarios(
     });
   }
 
-  if (out.length < 3) {
-    const altMode: AllocationMode = input.allocationMode === "even" ? "fill_capacity" : "even";
-    const alt = evaluateNewWork(snapshot, { ...input, allocationMode: altMode });
-    out.push({
-      id: "switch_allocation",
-      title: altMode === "even" ? "Use even spread" : "Use fill capacity",
-      description:
-        altMode === "even"
-          ? "Spread hours evenly across weeks instead of filling capacity first."
-          : "Fill remaining capacity each week before spreading the rest.",
-      evaluation: alt,
-      apply: { allocationMode: altMode },
-    });
-  }
-
-  return out.slice(0, 3);
+  return out.slice(0, 2);
 }
 
-/**
- * Evaluate new work impact on an already-built horizon (the "view").
- * If the input dates are outside the current horizon, this will clamp.
- * (In UX, you can choose to expand the view before calling this.)
- */
-export function evaluateNewWork(before: DashboardSnapshot, input: NewWorkInput): EvaluateResult {
-  const afterHorizon = applyWorkToHorizon(before.horizonWeeks, input);
+export function evaluateNewWork(
+  before: DashboardSnapshot,
+  input: NewWorkInput,
+  stacking: StackingContext
+): EvaluateResult {
+  const range = spanForInput(input, before.horizonWeeks);
+  const stacked = stackedByMember(
+    stacking.members,
+    stacking.workItems,
+    range
+  );
+  const remainings = memberInsights(stacking.members, stacked, range);
+  const spanDays = spanDaysInclusive(range.start, range.end);
+  const teamRemainingHours = getTeamRemainingInRange({
+    memberRemainings: remainings.map((m) => m.remainingHours),
+    bufferHoursPerWeek: before.bufferHoursPerWeek,
+    spanDays,
+  });
+
+  const afterHorizon = applyHypotheticalToHorizon(
+    before.horizonWeeks,
+    input,
+    stacking.members,
+    stacked,
+    range
+  );
   const after = recomputeSnapshot(before, afterHorizon);
 
   const startIdx = clamp(
     weekIndexForYmd(before.horizonWeeks, input.startYmd),
     0,
-    before.horizonWeeks.length - 1
+    Math.max(0, before.horizonWeeks.length - 1)
   );
 
   const endIdxRaw =
@@ -308,14 +385,17 @@ export function evaluateNewWork(before: DashboardSnapshot, input: NewWorkInput):
       ? weekIndexForYmd(before.horizonWeeks, input.deadlineYmd)
       : before.horizonWeeks.length - 1;
 
-  const endIdx = clamp(endIdxRaw, startIdx, before.horizonWeeks.length - 1);
+  const endIdx = clamp(endIdxRaw, startIdx, Math.max(0, before.horizonWeeks.length - 1));
 
-  const weeksCount = endIdx - startIdx + 1;
+  const weeksCount = Math.max(1, endIdx - startIdx + 1);
   const perWeekHours = round1(input.totalHours / weeksCount);
 
   const startBucket = before.horizonWeeks[startIdx];
   const endBucket = before.horizonWeeks[endIdx];
-  const weekRangeLabel = `${startBucket.weekStartYmd} → ${endBucket.weekEndYmd}`;
+  const weekRangeLabel =
+    startBucket && endBucket
+      ? `${startBucket.weekStartYmd} → ${endBucket.weekEndYmd}`
+      : `${range.start} → ${range.end}`;
 
   const mode = input.allocationMode ?? "even";
 
@@ -323,10 +403,22 @@ export function evaluateNewWork(before: DashboardSnapshot, input: NewWorkInput):
     before,
     after,
     deltas: {
-      totalCommittedHours: after.totalCommittedHours - before.totalCommittedHours,
+      totalCommittedHours:
+        after.totalCommittedHours - before.totalCommittedHours,
       maxUtilizationPct: after.maxUtilizationPct - before.maxUtilizationPct,
-      overallUtilizationPct: after.overallUtilizationPct - before.overallUtilizationPct,
+      overallUtilizationPct:
+        after.overallUtilizationPct - before.overallUtilizationPct,
     },
-    applied: { weeksCount, perWeekHours, weekRangeLabel, startIdx, endIdx, allocationMode: mode },
+    applied: {
+      weeksCount,
+      perWeekHours,
+      weekRangeLabel,
+      startIdx,
+      endIdx,
+      allocationMode: mode,
+    },
+    teamRemainingHours,
+    requestedHours: sanitizeHoursInputAllowZero(input.totalHours),
+    memberRemainings: remainings,
   };
 }

@@ -6,6 +6,8 @@ import { getTeamRowForOwnerAdmin } from "@/lib/db/ensurePersonalTeamForUser";
 import { redirect } from "next/navigation";
 import { AskKliraProvider } from "@/context/AskKliraContext";
 import { getDefaultDashboardSnapshot } from "@/lib/dashboardEngine";
+import { getTeamMembers, type TeamMemberRow } from "@/lib/db/getTeamMembers";
+import { getWorkItemsForTeam, type WorkItemRow } from "@/lib/db/getWorkItemsForTeam";
 import { DEFAULT_TZ, todayYmdInTz } from "@/lib/dates";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -35,9 +37,15 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   const todayYmd = todayYmdInTz(DEFAULT_TZ);
   let snapshot;
+  let teamMembers: TeamMemberRow[] = [];
+  let workItems: WorkItemRow[] = [];
   if (teamIdForSnapshot) {
     try {
-      snapshot = await getDefaultDashboardSnapshot(teamIdForSnapshot, todayYmd);
+      [snapshot, teamMembers, workItems] = await Promise.all([
+        getDefaultDashboardSnapshot(teamIdForSnapshot, todayYmd),
+        getTeamMembers(teamIdForSnapshot),
+        getWorkItemsForTeam(teamIdForSnapshot),
+      ]);
     } catch {
       // If snapshot fetch fails (e.g. during onboarding), render layout without modal
       snapshot = null;
@@ -60,6 +68,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <main className="flex min-h-0 flex-1 flex-col overflow-y-auto">
           <AskKliraProvider
             snapshot={snapshot}
+            teamMembers={teamMembers}
+            workItems={workItems}
             todayYmd={todayYmd}
             displayName={displayName}
           >

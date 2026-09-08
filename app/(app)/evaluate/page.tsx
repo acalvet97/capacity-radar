@@ -10,6 +10,8 @@ import { getDefaultDashboardSnapshot } from "@/lib/dashboardEngine";
 import { DEFAULT_TZ, todayYmdInTz } from "@/lib/dates";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { getTeamIdForUser } from "@/lib/db/getTeamIdForUser";
+import { getTeamMembers } from "@/lib/db/getTeamMembers";
+import { getWorkItemsForTeam } from "@/lib/db/getWorkItemsForTeam";
 
 export default async function EvaluatePage() {
   const supabase = await supabaseServer();
@@ -27,11 +29,21 @@ export default async function EvaluatePage() {
 
   const todayYmd = todayYmdInTz(DEFAULT_TZ);
 
-  const snapshot = await getDefaultDashboardSnapshot(teamId, todayYmd);
+  const [snapshot, teamMembers, workItems] = await Promise.all([
+    getDefaultDashboardSnapshot(teamId, todayYmd),
+    getTeamMembers(teamId),
+    getWorkItemsForTeam(teamId),
+  ]);
 
   return (
     <div className="flex h-full min-h-0 min-w-0 w-full flex-col overflow-hidden pb-4 pt-0">
-      <EvaluateClient snapshot={snapshot} todayYmd={todayYmd} displayName={displayName} />
+      <EvaluateClient
+        snapshot={snapshot}
+        teamMembers={teamMembers}
+        workItems={workItems}
+        todayYmd={todayYmd}
+        displayName={displayName}
+      />
     </div>
   );
 }

@@ -354,6 +354,7 @@ export default async function DashboardPage({
           teamId={teamId}
           items={top5WorkItems}
           teamMembers={teamMembers}
+          allWorkItems={workItems}
           title="Committed work (top 5 by hours)"
           viewStartYmd={viewStartYmd}
           viewEndYmd={viewEndYmd}

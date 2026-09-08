@@ -14,63 +14,77 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Separator } from "@/components/ui/separator";
-import { updateWorkItemAction } from "@/app/actions/workItems";
-import { PhaseList } from "@/components/work-items/PhaseList";
+import {
+  deleteWorkItemAction,
+  updateWorkItemAction,
+} from "@/app/actions/workItems";
+import {
+  PhaseList,
+  type PhaseDraft,
+} from "@/components/work-items/PhaseList";
 import type { WorkItemRow } from "@/lib/db/getWorkItemsForTeam";
 import type { TeamMemberRow } from "@/lib/db/getTeamMembers";
-import {
-  HOURS_STEP,
-  formatHoursForDisplay,
-  sanitizeHoursInput,
-} from "@/lib/hours";
+import { formatHoursForDisplay } from "@/lib/hours";
 import { formatDateDdMmYyyy } from "@/lib/dates";
 
 export type WorkItemEditSheetProps = {
   teamId: string;
   item: WorkItemRow;
   teamMembers: TeamMemberRow[];
+  allWorkItems: WorkItemRow[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  deleteIfEmptyOnClose?: boolean;
+  initialAddDraft?: PhaseDraft;
 };
 
 export function WorkItemEditSheet({
   teamId,
   item,
   teamMembers,
+  allWorkItems,
   open,
   onOpenChange,
+  deleteIfEmptyOnClose = false,
+  initialAddDraft,
 }: WorkItemEditSheetProps) {
   const router = useRouter();
   const [isPending, startTransition] = React.useTransition();
   const [draftName, setDraftName] = React.useState(item.name ?? "");
-  const [draftHours, setDraftHours] = React.useState(
-    String(item.estimated_hours ?? "")
-  );
   const [draftStart, setDraftStart] = React.useState(item.start_date ?? "");
   const [draftDeadline, setDraftDeadline] = React.useState(item.deadline ?? "");
+  const [keepAfterClose, setKeepAfterClose] = React.useState(
+    item.phases.length > 0
+  );
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    if (item.phases.length > 0) setKeepAfterClose(true);
+  }, [item.phases.length]);
 
-  const hasPhases = item.phases.length > 0;
   const phaseTotal = item.phases.reduce(
     (sum, phase) => sum + phase.estimated_hours,
     0
   );
 
-  // Deleting the last phase hands the total back to the user, so seed the input
-  // with the total they just had rather than leaving a stale draft.
-  const previouslyHadPhases = React.useRef(hasPhases);
-  React.useEffect(() => {
-    if (previouslyHadPhases.current && !hasPhases) {
-      setDraftHours(String(item.estimated_hours));
-    }
-    previouslyHadPhases.current = hasPhases;
-  }, [hasPhases, item.estimated_hours]);
-
-  // The project deadline stays independent of phase deadlines, so a later phase
-  // is a warning rather than a blocked save.
   const latePhases = draftDeadline
     ? item.phases.filter((phase) => phase.deadline > draftDeadline)
     : [];
+
+  function handleOpenChange(next: boolean) {
+    if (next) {
+      onOpenChange(true);
+      return;
+    }
+    if (deleteIfEmptyOnClose && item.phases.length === 0 && !keepAfterClose) {
+      startTransition(async () => {
+        await deleteWorkItemAction({ teamId, workItemId: item.id });
+        onOpenChange(false);
+        router.refresh();
+      });
+      return;
+    }
+    onOpenChange(false);
+  }
 
   function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -81,14 +95,9 @@ export function WorkItemEditSheet({
       return;
     }
 
-    let estimatedHours: number | undefined;
-    if (!hasPhases) {
-      estimatedHours = sanitizeHoursInput(draftHours);
-      if (estimatedHours <= 0) {
-        setErrorMessage("Estimated hours must be greater than 0.");
-        return;
-      }
-      setDraftHours(String(estimatedHours));
+    if (deleteIfEmptyOnClose && item.phases.length === 0 && !keepAfterClose) {
+      setErrorMessage("Add a phase before saving.");
+      return;
     }
 
     startTransition(async () => {
@@ -97,8 +106,6 @@ export function WorkItemEditSheet({
           teamId,
           workItemId: item.id,
           name: draftName,
-          // Omitted when phases own the total; the action rejects it outright.
-          estimatedHours,
           startDate: draftStart,
           deadline: draftDeadline || null,
         });
@@ -106,7 +113,7 @@ export function WorkItemEditSheet({
           setErrorMessage(res.message ?? "Update failed.");
           return;
         }
-        onOpenChange(false);
+        handleOpenChange(false);
         router.refresh();
       } catch (err: unknown) {
         setErrorMessage(err instanceof Error ? err.message : "Update failed");
@@ -117,7 +124,7 @@ export function WorkItemEditSheet({
   const displayName = (item.name ?? "").trim() || "work item";
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
+    <Sheet open={open} onOpenChange={handleOpenChange}>
       <SheetContent
         side="bottom"
         className="left-auto right-8 max-h-[92vh] w-full max-w-2xl gap-0 overflow-y-auto rounded-t-xl p-10"
@@ -127,8 +134,8 @@ export function WorkItemEditSheet({
             Edit {displayName}
           </SheetTitle>
           <p className="text-sm text-muted-foreground">
-            Update the commitment, or break it into phases so its hours reflect
-            how the work actually runs.
+            Hours come from phases. Assign an owner and dates on each phase so
+            capacity stacking can see the work.
           </p>
         </SheetHeader>
 
@@ -149,34 +156,19 @@ export function WorkItemEditSheet({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="edit-hours">
-              {hasPhases ? "Total hours (from phases)" : "Expected total hours"}
-            </Label>
+            <Label htmlFor="edit-hours">Total hours (from phases)</Label>
             <Input
               id="edit-hours"
-              type="number"
-              min={HOURS_STEP}
-              step={HOURS_STEP}
-              inputMode="decimal"
-              value={hasPhases ? formatHoursForDisplay(phaseTotal) : draftHours}
-              disabled={hasPhases}
-              onChange={(e) => setDraftHours(e.target.value)}
-              onBlur={() => {
-                if (hasPhases) return;
-                const sanitized = sanitizeHoursInput(draftHours);
-                if (Number(draftHours) !== sanitized) {
-                  setDraftHours(String(sanitized));
-                }
-              }}
-              placeholder="E.g.: 40"
+              value={formatHoursForDisplay(phaseTotal)}
+              disabled
             />
-            {hasPhases ? (
-              <p className="text-xs text-muted-foreground">
-                Total: sum of {item.phases.length}{" "}
-                {item.phases.length === 1 ? "phase" : "phases"}. Edit the phase
-                hours below to change it.
-              </p>
-            ) : null}
+            <p className="text-xs text-muted-foreground">
+              {item.phases.length === 0
+                ? "Add a phase below to set hours."
+                : `Total: sum of ${item.phases.length} ${
+                    item.phases.length === 1 ? "phase" : "phases"
+                  }.`}
+            </p>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -223,7 +215,10 @@ export function WorkItemEditSheet({
           phases={item.phases}
           teamMembers={teamMembers}
           workItemStartDate={draftStart}
+          allWorkItems={allWorkItems}
           disabled={isPending}
+          initialAddDraft={initialAddDraft}
+          onPhaseSaved={() => setKeepAfterClose(true)}
         />
 
         <SheetFooter className="flex flex-col gap-3 px-0 pt-10 pb-0">

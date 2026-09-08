@@ -147,12 +147,39 @@ export async function updatePhaseAction(
 
 export async function deletePhaseAction(input: {
   phaseId: string;
-}): Promise<ActionResult<{ revertedToManualHours: boolean }>> {
+}): Promise<ActionResult> {
   const supabase = await supabaseServer();
 
-  // Returns true when that was the last phase, so the caller can tell the user
-  // the single hours estimate is editable again.
-  const { data, error } = await supabase.rpc("delete_work_item_phase", {
+  const { data: phase, error: phaseError } = await supabase
+    .from("work_item_phases")
+    .select("id, work_item_id")
+    .eq("id", input.phaseId)
+    .maybeSingle();
+
+  if (phaseError) {
+    return { ok: false, message: `Could not delete phase: ${phaseError.message}` };
+  }
+  if (!phase) {
+    return { ok: false, message: "Phase not found." };
+  }
+
+  const { count, error: countError } = await supabase
+    .from("work_item_phases")
+    .select("id", { count: "exact", head: true })
+    .eq("work_item_id", phase.work_item_id);
+
+  if (countError) {
+    return { ok: false, message: `Could not delete phase: ${countError.message}` };
+  }
+  if ((count ?? 0) <= 1) {
+    return {
+      ok: false,
+      message:
+        "A work item needs at least one phase. Delete the work item instead.",
+    };
+  }
+
+  const { error } = await supabase.rpc("delete_work_item_phase", {
     p_phase_id: input.phaseId,
   });
 
@@ -162,7 +189,7 @@ export async function deletePhaseAction(input: {
 
   revalidateWorkSurfaces();
 
-  return { ok: true, revertedToManualHours: data === true };
+  return { ok: true };
 }
 
 export async function reorderPhasesAction(input: {

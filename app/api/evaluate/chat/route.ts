@@ -14,6 +14,9 @@ import {
 } from "@/lib/evaluateChatServer";
 import { getDashboardSnapshotFromDb } from "@/lib/dashboardEngine";
 import { getTeamIdForUser } from "@/lib/db/getTeamIdForUser";
+import { getTeamMembers } from "@/lib/db/getTeamMembers";
+import { getWorkItemsForTeam } from "@/lib/db/getWorkItemsForTeam";
+import { memberRemainingsForRange } from "@/lib/evaluateEngine";
 import { DEFAULT_TZ, todayYmdInTz } from "@/lib/dates";
 
 export const maxDuration = 60;
@@ -119,7 +122,23 @@ export async function POST(req: Request) {
       locale: "en-GB",
       tz: DEFAULT_TZ,
     });
-    snapshotDigestText = buildSnapshotDigest(snapshot, todayYmd);
+    const [members, workItems] = await Promise.all([
+      getTeamMembers(teamId),
+      getWorkItemsForTeam(teamId),
+    ]);
+    const horizon = snapshot.horizonWeeks;
+    const memberRemainings =
+      horizon.length > 0
+        ? memberRemainingsForRange(members, workItems, {
+            start: horizon[0].weekStartYmd,
+            end: horizon[horizon.length - 1].weekEndYmd,
+          })
+        : [];
+    snapshotDigestText = buildSnapshotDigest(
+      snapshot,
+      todayYmd,
+      memberRemainings
+    );
   } catch {
     snapshotDigestText = `Today: ${todayYmd}\nNo team data available.`;
   }

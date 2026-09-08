@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import type { DashboardSnapshot } from "@/lib/dashboardEngine";
 import { EvaluateClient } from "@/components/evaluate/EvaluateClient";
 import { useAskKlira } from "@/context/AskKliraContext";
+import type { TeamMemberRow } from "@/lib/db/getTeamMembers";
+import type { WorkItemRow } from "@/lib/db/getWorkItemsForTeam";
 import {
   Tooltip,
   TooltipContent,
@@ -15,6 +17,8 @@ import {
 interface AskKliraModalProps {
   onClose: () => void;
   snapshot: DashboardSnapshot;
+  teamMembers: TeamMemberRow[];
+  workItems: WorkItemRow[];
   todayYmd: string;
   displayName: string;
 }
@@ -22,6 +26,8 @@ interface AskKliraModalProps {
 export function AskKliraModal({
   onClose,
   snapshot,
+  teamMembers,
+  workItems,
   todayYmd,
   displayName,
 }: AskKliraModalProps) {
@@ -98,6 +104,8 @@ export function AskKliraModal({
         <div className="flex min-h-0 flex-1 flex-col">
           <EvaluateClient
             snapshot={snapshot}
+            teamMembers={teamMembers}
+            workItems={workItems}
             todayYmd={todayYmd}
             displayName={displayName}
           />

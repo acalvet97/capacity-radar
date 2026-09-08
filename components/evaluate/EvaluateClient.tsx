@@ -7,8 +7,6 @@ import { toast } from "sonner";
 import { ArrowUp, ArrowRight, Check, X } from "lucide-react";
 import { DatePicker } from "@/components/ui/date-picker";
 import { cn } from "@/lib/utils";
-
-import { CommitmentAllocationFieldset } from "@/components/committed-work/CommitmentAllocationFieldset";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -21,6 +19,8 @@ import { WeekUtilizationBar } from "@/components/dashboard/WeekUtilizationBar";
 
 import type { DashboardSnapshot } from "@/lib/dashboardEngine";
 import { isValidYmd } from "@/lib/dates";
+import type { TeamMemberRow } from "@/lib/db/getTeamMembers";
+import type { WorkItemRow } from "@/lib/db/getWorkItemsForTeam";
 import { SuggestedPrompts, PROMPT_ICON_MAP } from "@/components/evaluate/SuggestedPrompts";
 import { useAskKlira } from "@/context/AskKliraContext";
 import {
@@ -33,7 +33,7 @@ import {
   type OverCapacityScenario,
 } from "@/lib/evaluateEngine";
 import { commitWork } from "@/app/(app)/evaluate/actions";
-import { sanitizeHoursInput } from "@/lib/hours";
+import { sanitizeHoursInput, formatHoursForDisplay } from "@/lib/hours";
 import { trackWorkItemAdded } from "@/lib/mixpanel";
 import type {
   EvaluateChatMessage,
@@ -165,6 +165,12 @@ function buildResultCardData(result: EvaluateResult): ResultCardData {
     fitsWithinCapacity: fitsWithinCapacity(result),
     totalCommittedHours: result.after.totalCommittedHours,
     totalCapacityHours: result.after.totalCapacityHours,
+    teamRemainingHours: result.teamRemainingHours,
+    requestedHours: result.requestedHours,
+    memberRemainings: result.memberRemainings.map((m) => ({
+      name: m.name,
+      remainingHours: m.remainingHours,
+    })),
     weeklyBreakdown,
   };
 }
@@ -374,6 +380,29 @@ function ResultCard({
         <span>{data.overallUtilizationPct}% overall</span>
       </div>
 
+      {typeof data.teamRemainingHours === "number" ? (
+        <p className="text-xs text-muted-foreground">
+          {formatHoursForDisplay(data.requestedHours ?? 0)}h requested vs{" "}
+          {formatHoursForDisplay(data.teamRemainingHours)}h remaining after
+          reserved capacity.
+        </p>
+      ) : null}
+
+      {data.memberRemainings && data.memberRemainings.length > 0 ? (
+        <p className="text-xs text-muted-foreground">
+          Most slack: {data.memberRemainings[0].name} (
+          {formatHoursForDisplay(data.memberRemainings[0].remainingHours)}h).
+          {data.memberRemainings.length > 1
+            ? ` Tightest: ${
+                data.memberRemainings[data.memberRemainings.length - 1].name
+              } (${formatHoursForDisplay(
+                data.memberRemainings[data.memberRemainings.length - 1]
+                  .remainingHours
+              )}h).`
+            : ""}
+        </p>
+      ) : null}
+
       <div className="space-y-3">
         {data.weeklyBreakdown.map((w) => (
           <div key={w.weekLabel} className="space-y-1">
@@ -408,7 +437,7 @@ function ScenarioCards({
   return (
     <div className="space-y-2">
       <p className="text-xs text-muted-foreground font-medium">Alternatives</p>
-      <div className="grid gap-2 sm:grid-cols-3">
+      <div className="grid gap-2 sm:grid-cols-2">
         {scenarios.map((s) => (
           <button
             key={s.id}
@@ -464,10 +493,10 @@ function CommitCard({
   return (
     <div className="rounded-lg border bg-background p-4 space-y-4">
       <div>
-        <h3 className="text-base font-medium text-foreground">Add existing commitment</h3>
+        <h3 className="text-base font-medium text-foreground">Add this work</h3>
         <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
-          Log work your team is already committed to. No capacity analysis — just a straight addition
-          to the pipeline.
+          Confirm the name and dates. Next you&apos;ll assign an owner and phase so the hours
+          count toward capacity.
         </p>
       </div>
 
@@ -532,12 +561,6 @@ function CommitCard({
         </div>
       </div>
 
-      <CommitmentAllocationFieldset
-        idPrefix="Klira-commit"
-        value={data.allocationMode === "fill_capacity" ? "even" : data.allocationMode}
-        onChange={(mode) => onChange({ allocationMode: mode })}
-      />
-
       <div className="flex flex-row gap-2 pt-1">
         <Button
           size="default"
@@ -562,10 +585,14 @@ const INITIAL_GREETING: EvaluateChatMessage = {
 
 export function EvaluateClient({
   snapshot,
+  teamMembers,
+  workItems,
   todayYmd,
   displayName,
 }: {
   snapshot: DashboardSnapshot;
+  teamMembers: TeamMemberRow[];
+  workItems: WorkItemRow[];
   todayYmd: string;
   displayName: string;
 }) {
@@ -584,6 +611,10 @@ export function EvaluateClient({
   const [startYmd, setStartYmd] = useState<string>(defaultStart);
   const [deadlineYmd, setDeadlineYmd] = useState<string>("");
   const [allocationMode, setAllocationMode] = useState<AllocationMode>("even");
+  const stacking = React.useMemo(
+    () => ({ members: teamMembers, workItems }),
+    [teamMembers, workItems]
+  );
 
   // Derived: has the conversation started (at least one user message)?
   const hasStarted = messages.some((m) => m.role === "user");
@@ -669,10 +700,10 @@ export function EvaluateClient({
       const nw = buildNewWorkInputFromMerged(merged, sh);
       if (!nw) return;
 
-      const evalResult = evaluateNewWork(snapshot, nw);
+      const evalResult = evaluateNewWork(snapshot, nw, stacking);
       const resultCard = buildResultCardData(evalResult);
       const scenarioCards = !fitsWithinCapacity(evalResult)
-        ? buildOverCapacityScenarios(snapshot, nw)
+        ? buildOverCapacityScenarios(snapshot, nw, stacking)
         : undefined;
       const commitCard: CommitCardData = {
         name: nw.name,
@@ -707,7 +738,7 @@ export function EvaluateClient({
         );
       });
     },
-    [snapshot]
+    [snapshot, stacking]
   );
 
   const scheduleHoursDebouncedEval = useCallback(() => {
@@ -781,11 +812,10 @@ export function EvaluateClient({
         s.apply.totalHours !== undefined
           ? String(sanitizeHoursInput(s.apply.totalHours))
           : hours;
-      const nextAlloc = s.apply.allocationMode ?? allocationMode;
+      const nextAlloc = allocationMode;
 
       setDeadlineYmd(nextDeadline);
       setHours(nextHours);
-      setAllocationMode(nextAlloc);
 
       const merged = {
         name,
@@ -969,10 +999,14 @@ export function EvaluateClient({
               const newWorkInput = buildNewWorkInputFromMerged(merged, safe);
 
               if (finalStructured.readyToEvaluate && newWorkInput) {
-                const evalResult = evaluateNewWork(snapshot, newWorkInput);
+                const evalResult = evaluateNewWork(
+                  snapshot,
+                  newWorkInput,
+                  stacking
+                );
                 const resultCard = buildResultCardData(evalResult);
                 const scenarioCards = !fitsWithinCapacity(evalResult)
-                  ? buildOverCapacityScenarios(snapshot, newWorkInput)
+                  ? buildOverCapacityScenarios(snapshot, newWorkInput, stacking)
                   : undefined;
                 const commitCard: CommitCardData = {
                   name: newWorkInput.name,
@@ -1139,7 +1173,7 @@ export function EvaluateClient({
         });
       }
     },
-    [router, snapshot, startRenderInterval, todayYmd]
+    [router, snapshot, stacking, startRenderInterval, todayYmd]
   );
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -1206,12 +1240,10 @@ export function EvaluateClient({
   function handleCommit() {
     startTransition(async () => {
       try {
-        await commitWork({
+        const { id } = await commitWork({
           name: name.trim(),
-          totalHours: safeHours,
           startYmd: startYmd.trim(),
           deadlineYmd: deadlineYmd.trim() ? deadlineYmd.trim() : undefined,
-          allocationMode: "even",
         });
         trackWorkItemAdded({
           source: "evaluate",
@@ -1219,40 +1251,16 @@ export function EvaluateClient({
           has_deadline: Boolean(deadlineYmd.trim()),
           allocation_mode: "even",
         });
+        const params = new URLSearchParams({
+          edit: id,
+          stub: "1",
+          phaseName: name.trim(),
+          phaseHours: String(safeHours),
+          phaseStart: startYmd.trim(),
+        });
+        if (deadlineYmd.trim()) params.set("phaseDeadline", deadlineYmd.trim());
+        router.push(`/committed-work?${params.toString()}`);
         router.refresh();
-        const committedName = name.trim();
-        setCommitSuccess(true);
-        window.setTimeout(() => {
-          setCommitSuccess(false);
-          setMessages((m) => {
-            const commitIdx = findLastCommitAssistantIndex(m);
-            const evalIdx = findLastEvaluationAssistantIndex(m);
-            if (commitIdx === -1) return m;
-            if (commitIdx === evalIdx) {
-              return m.map((msg, i) =>
-                i === evalIdx
-                  ? {
-                      role: "assistant",
-                      content: "",
-                      isPostCommit: true,
-                      postCommitWorkName: committedName,
-                    }
-                  : msg
-              );
-            }
-            const cleared = m.map((msg, i) =>
-              i === commitIdx ? { ...msg, commitCard: undefined } : msg
-            );
-            return [
-              ...cleared,
-              {
-                role: "assistant",
-                content: `Done. "${committedName}" has been added to your work items.`,
-              },
-            ];
-          });
-          resetFormOnly();
-        }, 1500);
       } catch (e: unknown) {
         toast.error("Could not commit work", {
           description: e instanceof Error ? e.message : "Unknown error",

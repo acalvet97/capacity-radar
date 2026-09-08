@@ -22,6 +22,7 @@ import { Pencil, Trash2 } from "lucide-react";
 import { WorkItemEditSheet } from "@/components/work-items/WorkItemEditSheet";
 import type { WorkItemRow } from "@/lib/db/getWorkItemsForTeam";
 import type { TeamMemberRow } from "@/lib/db/getTeamMembers";
+import type { PhaseDraft } from "@/components/work-items/PhaseList";
 import { formatDateDdMmYyyy } from "@/lib/dates";
 import {
   weeklyLoadInWindow,
@@ -41,31 +42,54 @@ export type WorkItemsTableProps = {
   teamId: string;
   items: WorkItemRow[];
   teamMembers: TeamMemberRow[];
+  /** Full team list for stacking; defaults to `items`. */
+  allWorkItems?: WorkItemRow[];
   viewStartYmd: string;
   viewEndYmd: string;
   weeklyCapacityHours: number;
   title?: string;
+  openItemId?: string | null;
+  deleteIfEmptyOnClose?: boolean;
+  initialAddDraft?: PhaseDraft;
+  onEditorClosed?: () => void;
 };
 
 export function WorkItemsTable({
   teamId,
   items,
   teamMembers,
+  allWorkItems,
   viewStartYmd,
   viewEndYmd,
   weeklyCapacityHours,
   title = "Work items",
+  openItemId = null,
+  deleteIfEmptyOnClose = false,
+  initialAddDraft,
+  onEditorClosed,
 }: WorkItemsTableProps) {
   const router = useRouter();
   const [isPending, startTransition] = React.useTransition();
   const [editing, setEditing] = React.useState<WorkItemRow | null>(null);
+  const stackingItems = allWorkItems ?? items;
+
+  React.useEffect(() => {
+    if (!openItemId) return;
+    const found =
+      stackingItems.find((item) => item.id === openItemId) ??
+      items.find((item) => item.id === openItemId) ??
+      null;
+    if (found) setEditing(found);
+  }, [openItemId, stackingItems, items]);
 
   // Prefer the row from the latest props so the open sheet picks up phase
   // changes after a refresh, falling back to the row as it was when opened.
   // Dashboard only passes the top 5 by hours, so editing phases can push an
   // item out of the list -- keep the sheet open instead of letting it vanish.
   const editingItem = editing
-    ? (items.find((item) => item.id === editing.id) ?? editing)
+    ? (stackingItems.find((item) => item.id === editing.id) ??
+      items.find((item) => item.id === editing.id) ??
+      editing)
     : null;
 
   function onDelete(item: WorkItemRow) {
@@ -109,7 +133,7 @@ export function WorkItemsTable({
                     <span className="cursor-help">Weekly Load</span>
                   </TooltipTrigger>
                   <TooltipContent side="top">
-                    Hours/week using even spread across ISO weeks from start to deadline (same basis as the capacity overview).
+                    Hours/week using even spread of this item&apos;s total across ISO weeks from start to deadline. The dashboard bars use stacked daily hours instead.
                   </TooltipContent>
                 </Tooltip>
               </TableHead>
@@ -201,9 +225,19 @@ export function WorkItemsTable({
           teamId={teamId}
           item={editingItem}
           teamMembers={teamMembers}
+          allWorkItems={stackingItems}
           open
+          deleteIfEmptyOnClose={
+            deleteIfEmptyOnClose && editingItem.id === openItemId
+          }
+          initialAddDraft={
+            editingItem.id === openItemId ? initialAddDraft : undefined
+          }
           onOpenChange={(next) => {
-            if (!next) setEditing(null);
+            if (!next) {
+              setEditing(null);
+              onEditorClosed?.();
+            }
           }}
         />
       ) : null}

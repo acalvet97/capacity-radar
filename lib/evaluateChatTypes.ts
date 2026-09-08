@@ -13,6 +13,9 @@ export type ResultCardData = {
   fitsWithinCapacity: boolean;
   totalCommittedHours: number;
   totalCapacityHours: number;
+  teamRemainingHours?: number;
+  requestedHours?: number;
+  memberRemainings?: { name: string; remainingHours: number }[];
   weeklyBreakdown: {
     weekLabel: string;
     beforePct: number;

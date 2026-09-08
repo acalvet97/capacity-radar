@@ -6,7 +6,6 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { DatePicker } from "@/components/ui/date-picker";
 import {
   Sheet,
   SheetContent,
@@ -15,18 +14,12 @@ import {
   SheetFooter,
 } from "@/components/ui/sheet";
 import { commitWork } from "@/app/(app)/evaluate/actions";
-import { sanitizeHoursInput } from "@/lib/hours";
 import { trackWorkItemAdded } from "@/lib/mixpanel";
-import { CommitmentAllocationFieldset } from "@/components/committed-work/CommitmentAllocationFieldset";
 
 export function CommittedWorkHeader() {
   const router = useRouter();
   const [sheetOpen, setSheetOpen] = React.useState(false);
   const [name, setName] = React.useState("");
-  const [startDate, setStartDate] = React.useState("");
-  const [deadline, setDeadline] = React.useState("");
-  const [estimatedHours, setEstimatedHours] = React.useState("");
-  const [allocationMode, setAllocationMode] = React.useState<"fill_capacity" | "even">("even");
   const [error, setError] = React.useState<string | null>(null);
   const [isPending, startTransition] = React.useTransition();
 
@@ -34,45 +27,26 @@ export function CommittedWorkHeader() {
     setSheetOpen(true);
     setError(null);
     setName("");
-    setStartDate("");
-    setDeadline("");
-    setEstimatedHours("");
-    setAllocationMode("even");
   }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    const hours = sanitizeHoursInput(estimatedHours);
     if (!name.trim()) {
       setError("Name is required.");
       return;
     }
-    if (hours <= 0) {
-      setError("Estimated hours must be greater than 0.");
-      return;
-    }
-    if (!startDate.trim()) {
-      setError("Start date is required.");
-      return;
-    }
     startTransition(async () => {
       try {
-        await commitWork({
-          name: name.trim(),
-          totalHours: hours,
-          startYmd: startDate.trim(),
-          deadlineYmd: deadline.trim() || undefined,
-          allocationMode,
-        });
+        const { id } = await commitWork({ name: name.trim() });
         trackWorkItemAdded({
           source: "committed_work",
-          estimated_hours: hours,
-          has_deadline: Boolean(deadline.trim()),
-          allocation_mode:
-            allocationMode === "fill_capacity" ? "fill_capacity" : "even",
+          estimated_hours: 0,
+          has_deadline: false,
+          allocation_mode: "even",
         });
         setSheetOpen(false);
+        router.push(`/committed-work?edit=${id}&stub=1`);
         router.refresh();
       } catch (err) {
         setError(err instanceof Error ? err.message : "Something went wrong.");
@@ -113,9 +87,12 @@ export function CommittedWorkHeader() {
           className="left-auto right-8 w-full max-w-lg rounded-t-xl p-16 gap-0"
         >
           <SheetHeader className="p-0 pb-12">
-            <SheetTitle className="text-2xl font-medium">Add existing commitment</SheetTitle>
+            <SheetTitle className="text-2xl font-medium">
+              Add existing commitment
+            </SheetTitle>
             <p className="text-sm text-muted-foreground">
-              Log work your team is already committed to. No capacity analysis — just a straight addition to the pipeline.
+              Name the project, then add phases with owners and dates so it
+              counts toward capacity.
             </p>
           </SheetHeader>
 
@@ -125,7 +102,7 @@ export function CommittedWorkHeader() {
             className="flex flex-col gap-4"
           >
             <div className="space-y-2">
-              <Label htmlFor="add-name">Commitment title</Label>
+              <Label htmlFor="add-name">Project name</Label>
               <Input
                 id="add-name"
                 value={name}
@@ -134,49 +111,6 @@ export function CommittedWorkHeader() {
                 autoComplete="off"
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="add-hours">Expected total hours</Label>
-              <Input
-                id="add-hours"
-                type="number"
-                min={0.5}
-                step={0.5}
-                inputMode="decimal"
-                value={estimatedHours}
-                onChange={(e) => setEstimatedHours(e.target.value)}
-                onBlur={() => {
-                  const sanitized = sanitizeHoursInput(estimatedHours);
-                  if (Number(estimatedHours) !== sanitized) {
-                    setEstimatedHours(String(sanitized));
-                  }
-                }}
-                placeholder="E.g.: 40"
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label>Start date</Label>
-                <DatePicker
-                  value={startDate}
-                  onChange={setStartDate}
-                  placeholder="dd/mm/yyyy"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Deadline</Label>
-                <DatePicker
-                  value={deadline}
-                  onChange={setDeadline}
-                  placeholder="dd/mm/yyyy"
-                  clearable
-                />
-              </div>
-            </div>
-            <CommitmentAllocationFieldset
-              idPrefix="sheet-add-commitment"
-              value={allocationMode}
-              onChange={setAllocationMode}
-            />
             {error && (
               <p className="text-sm text-destructive" role="alert">
                 {error}
@@ -192,7 +126,7 @@ export function CommittedWorkHeader() {
               size="lg"
               className="w-full"
             >
-              {isPending ? "Adding…" : "Fast commit"}
+              {isPending ? "Adding…" : "Continue to phases"}
             </Button>
             <Link
               href="/evaluate"

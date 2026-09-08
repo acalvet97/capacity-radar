@@ -42,6 +42,24 @@ export default async function CommittedWorkPage({
 
   const params = await searchParams;
   const view = normalizeViewSearchParam(params?.view);
+  const editId = typeof params?.edit === "string" ? params.edit : null;
+  const isStub = params?.stub === "1";
+  const initialAddDraft =
+    isStub && editId
+      ? {
+          name:
+            typeof params?.phaseName === "string" ? params.phaseName : "",
+          ownerMemberId: "",
+          startDate:
+            typeof params?.phaseStart === "string" ? params.phaseStart : "",
+          deadline:
+            typeof params?.phaseDeadline === "string"
+              ? params.phaseDeadline
+              : "",
+          hours:
+            typeof params?.phaseHours === "string" ? params.phaseHours : "",
+        }
+      : undefined;
   const todayYmd = todayYmdInTz(DEFAULT_TZ);
   const weekCount = weeksForHorizonView(view, todayYmd);
   const viewStart = startOfIsoWeekUtc(ymdToUtcDate(todayYmd));
@@ -82,6 +100,10 @@ export default async function CommittedWorkPage({
           viewStartYmd={viewStartYmd}
           viewEndYmd={viewEndYmd}
           weeklyCapacityHours={weeklyAvailableCapacity}
+          view={view}
+          openItemId={editId}
+          deleteIfEmptyOnClose={isStub}
+          initialAddDraft={initialAddDraft}
         />
       </section>
     </div>

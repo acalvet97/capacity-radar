@@ -2,7 +2,6 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { toast } from "sonner";
 import { ArrowDown, ArrowUp, Pencil, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -46,8 +45,14 @@ import {
   type FrontLoadAllocation,
 } from "@/lib/phaseAllocation";
 import { PhaseAllocationPreview } from "@/components/work-items/PhaseAllocationPreview";
+import type { WorkItemRow } from "@/lib/db/getWorkItemsForTeam";
+import {
+  evaluateHypotheticalAddition,
+  getStackedDailyHours,
+  type EdfKey,
+} from "@/lib/capacityStacking";
 
-type PhaseDraft = {
+export type PhaseDraft = {
   name: string;
   ownerMemberId: string;
   startDate: string;
@@ -90,6 +95,8 @@ type AllocationView = {
   explicitInverted: boolean;
   inferredInverted: boolean;
   allocation: FrontLoadAllocation | null;
+  stackingLeftoverHours: number;
+  deadline: string;
 };
 
 function allocationViewFor(input: {
@@ -100,6 +107,9 @@ function allocationViewFor(input: {
   previousDeadline: string | null;
   workItemStartDate: string;
   teamMembers: TeamMemberRow[];
+  allWorkItems: WorkItemRow[];
+  excludePhaseId?: string | null;
+  edfKey: EdfKey;
 }): AllocationView {
   const owner =
     input.teamMembers.find((member) => member.id === input.ownerMemberId) ??
@@ -127,6 +137,7 @@ function allocationViewFor(input: {
   );
 
   let allocation: FrontLoadAllocation | null = null;
+  let stackingLeftoverHours = 0;
   if (
     owner &&
     resolvedStart &&
@@ -141,6 +152,28 @@ function allocationViewFor(input: {
       totalHours: input.hours,
       dailyHours: owner.daily_hours,
     });
+    const stacked = getStackedDailyHours({
+      memberId: owner.id,
+      range: { start: resolvedStart, end: deadline },
+      workItems: input.allWorkItems,
+      members: input.teamMembers,
+      excludePhaseId: input.excludePhaseId,
+      onlyBefore: {
+        deadline,
+        startDate: resolvedStart,
+        sortOrder: input.edfKey.sortOrder,
+        id: input.edfKey.id,
+      },
+    });
+    stackingLeftoverHours = evaluateHypotheticalAddition({
+      hypotheticalPhase: {
+        startDate: resolvedStart,
+        totalHours: input.hours,
+        rangeEnd: deadline,
+      },
+      existingStackedHours: stacked,
+      dailyHours: owner.daily_hours,
+    }).leftoverHours;
   }
 
   return {
@@ -150,6 +183,8 @@ function allocationViewFor(input: {
     explicitInverted,
     inferredInverted,
     allocation,
+    stackingLeftoverHours,
+    deadline,
   };
 }
 
@@ -197,6 +232,15 @@ function PhaseAllocationNotes({
           .
         </p>
       ) : null}
+      {view.stackingLeftoverHours > 0 && view.deadline ? (
+        <p className="text-xs text-amber-600 dark:text-amber-500">
+          Assigning this phase doesn&apos;t fit in {ownerName}&apos;s remaining
+          capacity before the deadline (
+          {formatHoursForDisplay(view.stackingLeftoverHours)}h would land after{" "}
+          {formatDateDMmm(view.deadline)}), based on assigned project work
+          (doesn&apos;t include team-wide time like meetings or admin).
+        </p>
+      ) : null}
       {view.allocation ? (
         <PhaseAllocationPreview allocation={view.allocation} />
       ) : null}
@@ -209,7 +253,10 @@ export type PhaseListProps = {
   phases: WorkItemPhaseRow[];
   teamMembers: TeamMemberRow[];
   workItemStartDate: string;
+  allWorkItems: WorkItemRow[];
   disabled?: boolean;
+  initialAddDraft?: PhaseDraft;
+  onPhaseSaved?: () => void;
 };
 
 export function PhaseList({
@@ -217,14 +264,20 @@ export function PhaseList({
   phases,
   teamMembers,
   workItemStartDate,
+  allWorkItems,
   disabled = false,
+  initialAddDraft,
+  onPhaseSaved,
 }: PhaseListProps) {
   const router = useRouter();
   const [isPending, startTransition] = React.useTransition();
   const [editingId, setEditingId] = React.useState<string | null>(null);
   const [draft, setDraft] = React.useState<PhaseDraft>(EMPTY_DRAFT);
-  const [isAdding, setIsAdding] = React.useState(false);
-  const [addDraft, setAddDraft] = React.useState<PhaseDraft>(EMPTY_DRAFT);
+  const [isAdding, setIsAdding] = React.useState(() => phases.length === 0);
+  const [addDraft, setAddDraft] = React.useState<PhaseDraft>(
+    () =>
+      phases.length === 0 && initialAddDraft ? initialAddDraft : EMPTY_DRAFT
+  );
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
   const [pendingDelete, setPendingDelete] =
     React.useState<WorkItemPhaseRow | null>(null);
@@ -297,6 +350,7 @@ export function PhaseList({
       }
       setIsAdding(false);
       setAddDraft(EMPTY_DRAFT);
+      onPhaseSaved?.();
       router.refresh();
     });
   }
@@ -335,12 +389,6 @@ export function PhaseList({
         setErrorMessage(res.message);
         return;
       }
-      if (res.revertedToManualHours) {
-        toast.success("Back to a single estimate", {
-          description:
-            "This work item has no phases left, so you can edit its total hours directly again.",
-        });
-      }
       if (editingId === phase.id) setEditingId(null);
       router.refresh();
     });
@@ -376,6 +424,13 @@ export function PhaseList({
     idPrefix: string,
     previousDeadline: string | null
   ) {
+    const excludePhaseId =
+      idPrefix.startsWith("phase-") && idPrefix !== "phase-new"
+        ? idPrefix.slice("phase-".length)
+        : null;
+    const existing = excludePhaseId
+      ? phases.find((phase) => phase.id === excludePhaseId)
+      : undefined;
     const view = allocationViewFor({
       ownerMemberId: value.ownerMemberId,
       startDate: value.startDate,
@@ -384,6 +439,14 @@ export function PhaseList({
       previousDeadline,
       workItemStartDate,
       teamMembers,
+      allWorkItems,
+      excludePhaseId,
+      edfKey: {
+        deadline: value.deadline.trim(),
+        startDate: value.startDate.trim(),
+        sortOrder: existing?.sort_order ?? Number.MAX_SAFE_INTEGER,
+        id: excludePhaseId ?? "new",
+      },
     });
 
     const startHint = !value.startDate.trim() && view.inferredStart
@@ -507,7 +570,7 @@ export function PhaseList({
       {phases.length === 0 && !isAdding ? (
         <div className="rounded-md border border-dashed p-4 text-center">
           <p className="text-sm text-muted-foreground">
-            This work item uses a single estimate.
+            Add at least one phase so this work counts toward capacity.
           </p>
           <Button
             type="button"
@@ -518,7 +581,7 @@ export function PhaseList({
             onClick={beginAdd}
           >
             <Plus className="size-4" />
-            Break this into phases
+            Add a phase
           </Button>
           {!hasMembers ? (
             <p className="mt-2 text-xs text-muted-foreground">
@@ -540,6 +603,14 @@ export function PhaseList({
               previousDeadline: previousDeadlineAt(index),
               workItemStartDate,
               teamMembers,
+              allWorkItems,
+              excludePhaseId: phase.id,
+              edfKey: {
+                deadline: phase.deadline,
+                startDate: phase.start_date ?? "",
+                sortOrder: phase.sort_order,
+                id: phase.id,
+              },
             });
             const spanLabel =
               savedView.resolvedStart && !savedView.inferredInverted
@@ -630,9 +701,18 @@ export function PhaseList({
                           variant="ghost"
                           size="icon"
                           className="size-8 text-muted-foreground hover:text-destructive"
-                          disabled={busy}
+                          disabled={busy || phases.length === 1}
                           onClick={() => setPendingDelete(phase)}
-                          aria-label={`Delete ${phase.name}`}
+                          aria-label={
+                            phases.length === 1
+                              ? `Cannot delete the last phase of ${phase.name}`
+                              : `Delete ${phase.name}`
+                          }
+                          title={
+                            phases.length === 1
+                              ? "A work item needs at least one phase"
+                              : undefined
+                          }
                         >
                           <Trash2 className="size-4" />
                         </Button>
@@ -661,7 +741,10 @@ export function PhaseList({
               variant="ghost"
               size="sm"
               disabled={busy}
-              onClick={() => setIsAdding(false)}
+              onClick={() => {
+                if (phases.length === 0) return;
+                setIsAdding(false);
+              }}
             >
               Cancel
             </Button>
@@ -698,11 +781,7 @@ export function PhaseList({
               {pendingDelete
                 ? `This removes ${formatHoursForDisplay(
                     pendingDelete.estimated_hours
-                  )}h from the work item's total.${
-                    phases.length === 1
-                      ? " It is the last phase, so the work item goes back to a single editable estimate."
-                      : ""
-                  }`
+                  )}h from the work item's total.`
                 : null}
             </AlertDialogDescription>
           </AlertDialogHeader>

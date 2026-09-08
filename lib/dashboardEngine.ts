@@ -2,6 +2,8 @@
 import { cache } from "react";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { getTeamIdForUser } from "@/lib/db/getTeamIdForUser";
+import { getTeamMembers, type TeamMemberRow } from "@/lib/db/getTeamMembers";
+import { getWorkItemsForTeam, type WorkItemRow } from "@/lib/db/getWorkItemsForTeam";
 import {
   DEFAULT_TZ,
   todayYmdInTz,
@@ -9,7 +11,6 @@ import {
   utcDateToYmd,
   addDaysUtc,
   startOfIsoWeekUtc,
-  diffDaysUtc,
 } from "@/lib/dates";
 import { clamp, round1 } from "@/lib/utils";
 import {
@@ -18,6 +19,11 @@ import {
   getTotalCapacityForHorizonWeeks,
 } from "@/lib/teamCapacity";
 import { type Bucket, exposureBucketFromUtilization } from "@/lib/dashboardConstants";
+import {
+  getStackedDailyHours,
+  stackedHoursInWeek,
+  type StackedHours,
+} from "@/lib/capacityStacking";
 
 export type { Bucket };
 export { exposureBucketFromUtilization };
@@ -100,10 +106,119 @@ function buildHorizon(params: {
   });
 }
 
+function kpisFromHorizon(
+  horizonWeeks: WeekSnapshot[],
+  weeklyAvailable: number,
+  bufferHoursPerWeek: number
+): DashboardSnapshot {
+  const totalCommittedHours = Math.round(
+    horizonWeeks.reduce((sum, w) => sum + w.committedHours, 0)
+  );
+
+  const maxUtilizationPct = Math.round(
+    Math.max(
+      0,
+      ...horizonWeeks.map((w) =>
+        w.capacityHours > 0 ? (w.committedHours / w.capacityHours) * 100 : 0
+      )
+    )
+  );
+
+  const totalCapacityHours = Math.round(
+    getTotalCapacityForHorizonWeeks(weeklyAvailable, horizonWeeks.length)
+  );
+  const viewCapacityHours = horizonWeeks.reduce(
+    (sum, w) => sum + w.capacityHours,
+    0
+  );
+
+  const overallUtilizationPct =
+    viewCapacityHours > 0
+      ? Math.round((totalCommittedHours / viewCapacityHours) * 100)
+      : 0;
+
+  const weeksEquivalent =
+    weeklyAvailable > 0 ? round1(totalCommittedHours / weeklyAvailable) : 0;
+
+  const cycleCapacityHours = Math.round(
+    getTotalCapacityForHorizonWeeks(weeklyAvailable, 4)
+  );
+
+  return {
+    horizonWeeks,
+    totalCommittedHours,
+    totalCapacityHours,
+    cycleCapacityHours,
+    overallUtilizationPct,
+    maxUtilizationPct,
+    exposureBucket: exposureBucketFromUtilization(maxUtilizationPct),
+    weeksEquivalent,
+    bufferHoursPerWeek,
+  };
+}
+
+/**
+ * Pure snapshot builder: stacked daily hours rolled up to ISO weeks.
+ * Reserved capacity still subtracts from the weekly ceiling, not from committed.
+ */
+export function buildDashboardSnapshot(input: {
+  members: TeamMemberRow[];
+  workItems: WorkItemRow[];
+  bufferHoursPerWeek: number;
+  startYmd: string;
+  weeks: number;
+  locale?: string;
+}): DashboardSnapshot {
+  const locale = input.locale ?? "en-GB";
+  const bufferHoursPerWeek = Math.max(0, Number(input.bufferHoursPerWeek) || 0);
+  const totalWeekly = getTotalWeeklyCapacityFromMembers(input.members);
+  const weeklyAvailable = getWeeklyAvailableCapacity(
+    totalWeekly,
+    bufferHoursPerWeek,
+    bufferHoursPerWeek > 0
+  );
+
+  const horizonWeeks = buildHorizon({
+    startYmd: input.startYmd,
+    weeks: input.weeks,
+    weeklyCapacity: weeklyAvailable,
+    locale,
+  });
+
+  if (!horizonWeeks.length) {
+    return kpisFromHorizon([], weeklyAvailable, bufferHoursPerWeek);
+  }
+
+  const range = {
+    start: horizonWeeks[0].weekStartYmd,
+    end: horizonWeeks[horizonWeeks.length - 1].weekEndYmd,
+  };
+
+  const stackedByMember: StackedHours[] = input.members.map((member) =>
+    getStackedDailyHours({
+      memberId: member.id,
+      range,
+      workItems: input.workItems,
+      members: input.members,
+    })
+  );
+
+  for (const week of horizonWeeks) {
+    week.committedHours = stackedHoursInWeek(
+      stackedByMember,
+      week.weekStartYmd,
+      week.weekEndYmd
+    );
+  }
+
+  return kpisFromHorizon(horizonWeeks, weeklyAvailable, bufferHoursPerWeek);
+}
+
 /**
  * DB-backed snapshot (deterministic):
  * - Rolling ISO-week horizon; capacity is weekly (canonical) × horizon weeks.
  * - Reserved capacity reduces weekly available capacity (structural load), not committed.
+ * - Committed hours come from stacked phase allocations, not even-spread estimates.
  */
 export async function getDashboardSnapshotFromDb(
   teamId: string,
@@ -129,134 +244,31 @@ export async function getDashboardSnapshotFromDb(
 
   const startYmd = (options.startYmd ?? todayYmdInTz(tz)).trim();
 
-  // Fetch all three independent queries in parallel
-  const [teamResult, membersResult, workItemsResult] = await Promise.all([
+  const [teamResult, members, workItems] = await Promise.all([
     supabase
       .from("teams")
       .select("id, buffer_hours_per_week")
       .eq("id", teamId)
       .single(),
-    supabase
-      .from("team_members")
-      .select("hours_per_cycle")
-      .eq("team_id", teamId),
-    supabase
-      .from("work_items")
-      .select("estimated_hours, start_date, deadline")
-      .eq("team_id", teamId),
+    getTeamMembers(teamId),
+    getWorkItemsForTeam(teamId),
   ]);
 
   if (teamResult.error) throw new Error(teamResult.error.message);
-  if (membersResult.error) throw new Error(membersResult.error.message);
-  if (workItemsResult.error) throw new Error(workItemsResult.error.message);
 
-  const bufferHoursPerWeek = Math.max(0, Number(teamResult.data?.buffer_hours_per_week ?? 0) || 0);
-
-  // 1) Weekly capacity from members (canonical unit)
-  const totalWeekly = getTotalWeeklyCapacityFromMembers(membersResult.data ?? []);
-  const reservedEnabled = bufferHoursPerWeek > 0;
-  const weeklyAvailable = getWeeklyAvailableCapacity(
-    totalWeekly,
-    bufferHoursPerWeek,
-    reservedEnabled
+  const bufferHoursPerWeek = Math.max(
+    0,
+    Number(teamResult.data?.buffer_hours_per_week ?? 0) || 0
   );
 
-  // 2) Build horizon: each week has weeklyAvailable capacity
-  const horizonWeeks = buildHorizon({
+  return buildDashboardSnapshot({
+    members,
+    workItems,
+    bufferHoursPerWeek,
     startYmd,
     weeks,
-    weeklyCapacity: weeklyAvailable,
     locale,
   });
-
-  const workItems = workItemsResult.data;
-
-  // 4) Distribute work into horizon buckets (uniform per week)
-  const horizonStartDate = ymdToUtcDate(horizonWeeks[0].weekStartYmd);
-  const horizonEndDate = ymdToUtcDate(horizonWeeks[horizonWeeks.length - 1].weekEndYmd);
-
-  for (const item of workItems ?? []) {
-    const hours = Number(item.estimated_hours ?? 0);
-    if (!Number.isFinite(hours) || hours <= 0) continue;
-
-    // If start_date is null: fallback to startYmd (view start)
-    const itemStartYmd = (item.start_date ?? startYmd).trim();
-    const start = ymdToUtcDate(itemStartYmd);
-
-    // deadline optional: if null => end at horizon end
-    const end = item.deadline ? ymdToUtcDate(item.deadline) : horizonEndDate;
-
-    // Ignore if fully outside horizon
-    if (end < horizonStartDate) continue;
-    if (start > horizonEndDate) continue;
-
-    // Clamp to horizon
-    const clampedStart = start < horizonStartDate ? horizonStartDate : start;
-    const clampedEnd = end > horizonEndDate ? horizonEndDate : end;
-
-    // Map to indices relative to horizonStart (ISO week Monday)
-    const horizonStart = ymdToUtcDate(horizonWeeks[0].weekStartYmd);
-
-    const startIdx = clamp(
-      Math.floor(diffDaysUtc(clampedStart, horizonStart) / 7),
-      0,
-      horizonWeeks.length - 1
-    );
-
-    const endIdx = clamp(
-      Math.floor(diffDaysUtc(clampedEnd, horizonStart) / 7),
-      startIdx,
-      horizonWeeks.length - 1
-    );
-
-    // Always distribute uniformly from start to deadline
-    const weeksCount = endIdx - startIdx + 1;
-    const perWeek = hours / weeksCount;
-
-    for (let i = startIdx; i <= endIdx; i++) {
-      horizonWeeks[i].committedHours = round1(horizonWeeks[i].committedHours + perWeek);
-    }
-  }
-
-  // 5) Compute KPIs
-  const totalCommittedHours = Math.round(
-    horizonWeeks.reduce((sum, w) => sum + w.committedHours, 0)
-  );
-
-  const maxUtilizationPct = Math.round(
-    Math.max(
-      ...horizonWeeks.map((w) =>
-        w.capacityHours > 0 ? (w.committedHours / w.capacityHours) * 100 : 0
-      )
-    )
-  );
-
-  const totalCapacityHours = Math.round(
-    getTotalCapacityForHorizonWeeks(weeklyAvailable, horizonWeeks.length)
-  );
-  const viewCapacityHours = horizonWeeks.reduce((sum, w) => sum + w.capacityHours, 0);
-
-  const overallUtilizationPct =
-    viewCapacityHours > 0 ? Math.round((totalCommittedHours / viewCapacityHours) * 100) : 0;
-
-  const weeksEquivalent =
-    weeklyAvailable > 0 ? round1(totalCommittedHours / weeklyAvailable) : 0;
-
-  const cycleCapacityHours = Math.round(
-    getTotalCapacityForHorizonWeeks(weeklyAvailable, 4)
-  );
-
-  return {
-    horizonWeeks,
-    totalCommittedHours,
-    totalCapacityHours,
-    cycleCapacityHours,
-    overallUtilizationPct,
-    maxUtilizationPct,
-    exposureBucket: exposureBucketFromUtilization(maxUtilizationPct),
-    weeksEquivalent,
-    bufferHoursPerWeek,
-  };
 }
 
 /**

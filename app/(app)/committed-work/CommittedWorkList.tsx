@@ -11,6 +11,9 @@ import {
 import { WorkItemsTable } from "@/components/work-items/WorkItemsTable";
 import type { WorkItemRow } from "@/lib/db/getWorkItemsForTeam";
 import type { TeamMemberRow } from "@/lib/db/getTeamMembers";
+import type { PhaseDraft } from "@/components/work-items/PhaseList";
+import type { ViewKey } from "@/lib/dashboardConstants";
+import { useRouter } from "next/navigation";
 import {
   weeklyLoadInWindow,
   pctWeeklyCapacity,
@@ -72,6 +75,10 @@ export function CommittedWorkList(props: {
   viewStartYmd: string;
   viewEndYmd: string;
   weeklyCapacityHours: number;
+  view: ViewKey;
+  openItemId?: string | null;
+  deleteIfEmptyOnClose?: boolean;
+  initialAddDraft?: PhaseDraft;
 }) {
   const {
     teamId,
@@ -80,7 +87,12 @@ export function CommittedWorkList(props: {
     viewStartYmd,
     viewEndYmd,
     weeklyCapacityHours,
+    view,
+    openItemId = null,
+    deleteIfEmptyOnClose = false,
+    initialAddDraft,
   } = props;
+  const router = useRouter();
   const [sortBy, setSortBy] = React.useState<SortKey>("deadline");
   const [impactFilter, setImpactFilter] = React.useState<"all" | ImpactLevel>("all");
 
@@ -142,10 +154,21 @@ export function CommittedWorkList(props: {
         teamId={teamId}
         items={sorted}
         teamMembers={teamMembers}
+        allWorkItems={items}
         viewStartYmd={viewStartYmd}
         viewEndYmd={viewEndYmd}
         weeklyCapacityHours={weeklyCapacityHours}
         title=""
+        openItemId={openItemId}
+        deleteIfEmptyOnClose={deleteIfEmptyOnClose}
+        initialAddDraft={initialAddDraft}
+        onEditorClosed={() => {
+          if (!openItemId) return;
+          const params = new URLSearchParams();
+          params.set("view", view);
+          router.replace(`/committed-work?${params.toString()}`);
+          router.refresh();
+        }}
       />
     </div>
   );

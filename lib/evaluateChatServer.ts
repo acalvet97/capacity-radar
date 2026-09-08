@@ -1,6 +1,16 @@
 import type { DashboardSnapshot } from "@/lib/dashboardEngine";
- 
-export function buildSnapshotDigest(snapshot: DashboardSnapshot, todayYmd: string): string {
+import { formatHoursForDisplay } from "@/lib/hours";
+
+export type DigestMemberRemaining = {
+  name: string;
+  remainingHours: number;
+};
+
+export function buildSnapshotDigest(
+  snapshot: DashboardSnapshot,
+  todayYmd: string,
+  memberRemainings: DigestMemberRemaining[] = []
+): string {
   const weeks = snapshot.horizonWeeks;
   if (!weeks.length) {
     return [`Today: ${todayYmd}`, "No horizon weeks in snapshot."].join("\n");
@@ -52,6 +62,16 @@ export function buildSnapshotDigest(snapshot: DashboardSnapshot, todayYmd: strin
     ...freeWeeks.slice(0, 3).map(
       (w) => `  ${w.label}: ${w.freeHours}h free (${w.utilizationPct}% used)`
     ),
+    ...(memberRemainings.length
+      ? [
+          "",
+          "Member remaining in this horizon (assigned project work only; raw daily hours, not reduced by team reserved time):",
+          ...memberRemainings.map(
+            (m) =>
+              `  ${m.name}: ${formatHoursForDisplay(m.remainingHours)}h remaining`
+          ),
+        ]
+      : []),
   ];
   return lines.join("\n");
 }
@@ -68,7 +88,9 @@ Today's date: ${todayYmd}
 TEAM CAPACITY SNAPSHOT
 ----------------------
 ${snapshotDigest}
- 
+
+When talking about people, you may cite who has the most remaining hours and who is already tight, using the member remaining list in the snapshot. Those numbers are raw assigned-project leftover and do not include team-wide reserved time (meetings, admin). Team yes/no fit uses the weekly snapshot totals, which already subtract reserved capacity.
+
 Intent classification instruction
 On every message, first classify the intent as one of:
   - evaluate: the manager is describing new work to assess

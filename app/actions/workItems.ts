@@ -4,7 +4,6 @@
 import { revalidatePath } from "next/cache";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { isValidYmd } from "@/lib/dates";
-import { sanitizeHoursInput } from "@/lib/hours";
 
 export async function deleteWorkItemAction(input: {
   teamId: string;
@@ -69,30 +68,19 @@ export async function updateWorkItemAction(
 
   const hasPhases = (phaseCount ?? 0) > 0;
 
-  // Reject rather than silently drop: the total is owned by the phase RPCs, and
-  // quietly discarding the field would hide client bugs and API misuse.
-  if (hasPhases && input.estimatedHours !== undefined) {
+  // Hours are owned by phases. Reject an explicit total rather than silently
+  // dropping it, including on a stub that does not have phases yet.
+  if (input.estimatedHours !== undefined) {
     return {
       ok: false,
-      message:
-        "Estimated hours are derived from this work item's phases. Edit the phase hours instead.",
+      message: hasPhases
+        ? "Estimated hours are derived from this work item's phases. Edit the phase hours instead."
+        : "Add a phase to set this work item's hours.",
     };
   }
 
-  if (!hasPhases && input.estimatedHours === undefined) {
-    return { ok: false, message: "Estimated hours are required." };
-  }
-
-  let hours: number | undefined;
-  if (!hasPhases) {
-    hours = sanitizeHoursInput(input.estimatedHours as number);
-    if (hours <= 0) {
-      return { ok: false, message: "Estimated hours must be greater than 0." };
-    }
-  }
-
   const start = input.startDate?.trim() ?? "";
-  if (!isValidYmd(start)) {
+  if (start && !isValidYmd(start)) {
     return { ok: false, message: "Start date must be a valid YYYY-MM-DD date." };
   }
 
@@ -103,15 +91,14 @@ export async function updateWorkItemAction(
     return { ok: false, message: "Deadline must be a valid YYYY-MM-DD date." };
   }
 
-  if (deadline && deadline < start) {
+  if (deadline && start && deadline < start) {
     return { ok: false, message: "Deadline cannot be before start date." };
   }
 
   const payload = {
     name,
-    start_date: start,
+    start_date: start || null,
     deadline,
-    ...(hours === undefined ? {} : { estimated_hours: hours }),
   };
 
   const { error } = await supabase

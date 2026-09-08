@@ -5,6 +5,8 @@ import { usePathname } from "next/navigation";
 import type { DashboardSnapshot } from "@/lib/dashboardEngine";
 import type { EvaluateChatMessage } from "@/lib/evaluateChatTypes";
 import { AskKliraModal } from "@/components/evaluate/AskKliraModal";
+import type { TeamMemberRow } from "@/lib/db/getTeamMembers";
+import type { WorkItemRow } from "@/lib/db/getWorkItemsForTeam";
 
 interface AskKliraContextValue {
   isOpen: boolean;
@@ -33,6 +35,8 @@ interface AskKliraProviderProps {
    *  is suppressed in that case but the provider still wraps the tree so
    *  EvaluateClient can safely call useAskKlira(). */
   snapshot: DashboardSnapshot | null;
+  teamMembers: TeamMemberRow[];
+  workItems: WorkItemRow[];
   todayYmd: string;
   displayName: string;
 }
@@ -40,6 +44,8 @@ interface AskKliraProviderProps {
 export function AskKliraProvider({
   children,
   snapshot,
+  teamMembers,
+  workItems,
   todayYmd,
   displayName,
 }: AskKliraProviderProps) {
@@ -95,6 +101,8 @@ export function AskKliraProvider({
         <AskKliraModal
           onClose={close}
           snapshot={snapshot}
+          teamMembers={teamMembers}
+          workItems={workItems}
           todayYmd={todayYmd}
           displayName={displayName}
         />
