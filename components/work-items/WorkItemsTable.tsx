@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { deleteWorkItemAction, updateWorkItemAction } from "@/app/actions/workItems";
+import { deleteWorkItemAction } from "@/app/actions/workItems";
 import {
   Table,
   TableBody,
@@ -19,9 +19,9 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Pencil, Trash2 } from "lucide-react";
-import { Input } from "@/components/ui/input";
-import { DatePicker } from "@/components/ui/date-picker";
+import { WorkItemEditSheet } from "@/components/work-items/WorkItemEditSheet";
 import type { WorkItemRow } from "@/lib/db/getWorkItemsForTeam";
+import type { TeamMemberRow } from "@/lib/db/getTeamMembers";
 import { formatDateDdMmYyyy } from "@/lib/dates";
 import {
   weeklyLoadInWindow,
@@ -30,7 +30,7 @@ import {
   IMPACT_LABELS,
   IMPACT_BADGE_STYLES,
 } from "@/lib/workItemTableUtils";
-import { sanitizeHoursInput, formatHoursForDisplay } from "@/lib/hours";
+import { formatHoursForDisplay } from "@/lib/hours";
 
 function formatDate(dateStr: string | null) {
   if (!dateStr) return "—";
@@ -40,6 +40,7 @@ function formatDate(dateStr: string | null) {
 export type WorkItemsTableProps = {
   teamId: string;
   items: WorkItemRow[];
+  teamMembers: TeamMemberRow[];
   viewStartYmd: string;
   viewEndYmd: string;
   weeklyCapacityHours: number;
@@ -49,6 +50,7 @@ export type WorkItemsTableProps = {
 export function WorkItemsTable({
   teamId,
   items,
+  teamMembers,
   viewStartYmd,
   viewEndYmd,
   weeklyCapacityHours,
@@ -56,12 +58,15 @@ export function WorkItemsTable({
 }: WorkItemsTableProps) {
   const router = useRouter();
   const [isPending, startTransition] = React.useTransition();
-  const [editingId, setEditingId] = React.useState<string | null>(null);
-  const [draftName, setDraftName] = React.useState("");
-  const [draftHours, setDraftHours] = React.useState("");
-  const [draftStart, setDraftStart] = React.useState("");
-  const [draftDeadline, setDraftDeadline] = React.useState("");
-  const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
+  const [editing, setEditing] = React.useState<WorkItemRow | null>(null);
+
+  // Prefer the row from the latest props so the open sheet picks up phase
+  // changes after a refresh, falling back to the row as it was when opened.
+  // Dashboard only passes the top 5 by hours, so editing phases can push an
+  // item out of the list -- keep the sheet open instead of letting it vanish.
+  const editingItem = editing
+    ? (items.find((item) => item.id === editing.id) ?? editing)
+    : null;
 
   function onDelete(item: WorkItemRow) {
     const ok = window.confirm("Delete this work item?");
@@ -80,53 +85,6 @@ export function WorkItemsTable({
       }
     });
   }
-
-  function beginEdit(item: WorkItemRow) {
-    setEditingId(item.id);
-    setDraftName(item.name ?? "");
-    setDraftHours(String(item.estimated_hours ?? ""));
-    setDraftStart(item.start_date ?? "");
-    setDraftDeadline(item.deadline ?? "");
-    setErrorMessage(null);
-  }
-
-  function cancelEdit() {
-    setEditingId(null);
-    setErrorMessage(null);
-  }
-
-  function onSubmitEdit(workItemId: string) {
-    setErrorMessage(null);
-    const parsedHours = sanitizeHoursInput(draftHours);
-    if (parsedHours <= 0) {
-      setErrorMessage("Estimated hours must be greater than 0.");
-      return;
-    }
-    setDraftHours(String(parsedHours));
-    startTransition(async () => {
-      try {
-        const res = await updateWorkItemAction({
-          teamId,
-          workItemId,
-          name: draftName,
-          estimatedHours: parsedHours,
-          startDate: draftStart,
-          deadline: draftDeadline || null,
-        });
-        if (!res.ok) {
-          setErrorMessage(res.message ?? "Update failed.");
-          return;
-        }
-        setEditingId(null);
-        router.refresh();
-      } catch (err: unknown) {
-        setErrorMessage(err instanceof Error ? err.message : "Update failed");
-      }
-    });
-  }
-
-  const buttonClass =
-    "shrink-0 rounded-lg border px-2 py-1.5 text-xs hover:bg-muted disabled:opacity-60 disabled:cursor-not-allowed";
 
   return (
     <div className="rounded-md border">
@@ -171,160 +129,84 @@ export function WorkItemsTable({
               );
               const pct = pctWeeklyCapacity(weeklyLoad, weeklyCapacityHours);
               const impact = impactFromPct(pct);
-              const isEditing = editingId === item.id;
+              const phaseCount = item.phases.length;
 
               return (
-                <React.Fragment key={item.id}>
-                  <TableRow>
-                    <TableCell className="font-medium">{displayName}</TableCell>
-                    <TableCell className="text-right">
-                      {formatHoursForDisplay(item.estimated_hours)}h
-                    </TableCell>
-                    <TableCell>{formatDate(item.start_date)}</TableCell>
-                    <TableCell>{formatDate(item.deadline)}</TableCell>
-                    <TableCell className="text-right">
-                      {weeklyCapacityHours > 0
-                        ? `${formatHoursForDisplay(weeklyLoad)}h`
-                        : "—"}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {weeklyCapacityHours > 0
-                        ? `${Math.round(pct * 10) / 10}%`
-                        : "—"}
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant="outline"
-                        className={IMPACT_BADGE_STYLES[impact]}
+                <TableRow key={item.id}>
+                  <TableCell className="font-medium">{displayName}</TableCell>
+                  <TableCell className="text-right">
+                    {formatHoursForDisplay(item.estimated_hours)}h
+                    {phaseCount > 0 ? (
+                      <span className="block text-xs font-normal text-muted-foreground">
+                        {phaseCount} {phaseCount === 1 ? "phase" : "phases"}
+                      </span>
+                    ) : null}
+                  </TableCell>
+                  <TableCell>{formatDate(item.start_date)}</TableCell>
+                  <TableCell>{formatDate(item.deadline)}</TableCell>
+                  <TableCell className="text-right">
+                    {weeklyCapacityHours > 0
+                      ? `${formatHoursForDisplay(weeklyLoad)}h`
+                      : "—"}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    {weeklyCapacityHours > 0
+                      ? `${Math.round(pct * 10) / 10}%`
+                      : "—"}
+                  </TableCell>
+                  <TableCell>
+                    <Badge
+                      variant="outline"
+                      className={IMPACT_BADGE_STYLES[impact]}
+                    >
+                      {IMPACT_LABELS[impact]}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <div className="flex justify-end gap-1">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground"
+                        disabled={isPending}
+                        onClick={() => setEditing(item)}
+                        aria-label="Edit work item"
                       >
-                        {IMPACT_LABELS[impact]}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-1">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground"
-                          disabled={isPending}
-                          onClick={() => beginEdit(item)}
-                          aria-label="Edit work item"
-                        >
-                          <Pencil className="size-4" />
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
-                          disabled={isPending}
-                          onClick={() => onDelete(item)}
-                          aria-label="Delete work item"
-                        >
-                          <Trash2 className="size-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                  {isEditing && (
-                    <TableRow className="bg-muted/20">
-                      <TableCell
-                        colSpan={8}
-                        className="p-4"
+                        <Pencil className="size-4" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
+                        disabled={isPending}
+                        onClick={() => onDelete(item)}
+                        aria-label="Delete work item"
                       >
-                        <div className="space-y-3">
-                          <div className="text-sm font-medium">
-                            Edit {displayName}
-                          </div>
-                          <div className="grid gap-3 sm:grid-cols-4">
-                            <label className="flex flex-col gap-1 text-xs">
-                              <span className="text-muted-foreground">Name</span>
-                              <Input
-                                value={draftName}
-                                onChange={(e) =>
-                                  setDraftName(e.target.value)
-                                }
-                              />
-                            </label>
-                            <label className="flex flex-col gap-1 text-xs">
-                              <span className="text-muted-foreground">
-                                Estimated hours
-                              </span>
-                              <Input
-                                type="number"
-                                min={0.5}
-                                step={0.5}
-                                inputMode="decimal"
-                                value={draftHours}
-                                onChange={(e) =>
-                                  setDraftHours(e.target.value)
-                                }
-                                onBlur={() => {
-                                  const sanitized = sanitizeHoursInput(draftHours);
-                                  if (Number(draftHours) !== sanitized) {
-                                    setDraftHours(String(sanitized));
-                                  }
-                                }}
-                              />
-                            </label>
-                            <div className="flex flex-col gap-1 text-xs">
-                              <span className="text-muted-foreground">
-                                Start date
-                              </span>
-                              <DatePicker
-                                value={draftStart}
-                                onChange={setDraftStart}
-                                placeholder="Start date"
-                                className="h-8 text-xs"
-                              />
-                            </div>
-                            <div className="flex flex-col gap-1 text-xs">
-                              <span className="text-muted-foreground">
-                                Deadline (optional)
-                              </span>
-                              <DatePicker
-                                value={draftDeadline}
-                                onChange={setDraftDeadline}
-                                placeholder="No deadline"
-                                clearable
-                                className="h-8 text-xs"
-                              />
-                            </div>
-                          </div>
-                          {errorMessage && (
-                            <p className="text-xs text-rose-600">
-                              {errorMessage}
-                            </p>
-                          )}
-                          <div className="flex justify-end gap-2">
-                            <button
-                              type="button"
-                              className={buttonClass}
-                              onClick={cancelEdit}
-                              disabled={isPending}
-                            >
-                              Cancel
-                            </button>
-                            <button
-                              type="button"
-                              className={buttonClass}
-                              onClick={() => onSubmitEdit(item.id)}
-                              disabled={isPending}
-                            >
-                              Save
-                            </button>
-                          </div>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </React.Fragment>
+                        <Trash2 className="size-4" />
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
               );
             })}
           </TableBody>
         </Table>
       )}
+
+      {editingItem ? (
+        <WorkItemEditSheet
+          key={editingItem.id}
+          teamId={teamId}
+          item={editingItem}
+          teamMembers={teamMembers}
+          open
+          onOpenChange={(next) => {
+            if (!next) setEditing(null);
+          }}
+        />
+      ) : null}
     </div>
   );
 }

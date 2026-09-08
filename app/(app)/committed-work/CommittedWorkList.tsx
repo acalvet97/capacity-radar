@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/select";
 import { WorkItemsTable } from "@/components/work-items/WorkItemsTable";
 import type { WorkItemRow } from "@/lib/db/getWorkItemsForTeam";
+import type { TeamMemberRow } from "@/lib/db/getTeamMembers";
 import {
   weeklyLoadInWindow,
   pctWeeklyCapacity,
@@ -67,6 +68,7 @@ function filterByImpact(
 export function CommittedWorkList(props: {
   teamId: string;
   items: WorkItemRow[];
+  teamMembers: TeamMemberRow[];
   viewStartYmd: string;
   viewEndYmd: string;
   weeklyCapacityHours: number;
@@ -74,6 +76,7 @@ export function CommittedWorkList(props: {
   const {
     teamId,
     items,
+    teamMembers,
     viewStartYmd,
     viewEndYmd,
     weeklyCapacityHours,
@@ -138,6 +141,7 @@ export function CommittedWorkList(props: {
       <WorkItemsTable
         teamId={teamId}
         items={sorted}
+        teamMembers={teamMembers}
         viewStartYmd={viewStartYmd}
         viewEndYmd={viewEndYmd}
         weeklyCapacityHours={weeklyCapacityHours}

@@ -12,6 +12,7 @@ import { getDefaultDashboardSnapshot, exposureBucketFromUtilization } from "@/li
 import { recomputeSnapshot } from "@/lib/evaluateEngine";
 import { getWorkItemsForTeam } from "@/lib/db/getWorkItemsForTeam";
 import { getTeamIdForUser } from "@/lib/db/getTeamIdForUser";
+import { getTeamMembers } from "@/lib/db/getTeamMembers";
 
 import { DashboardViewSelector } from "@/components/dashboard/DashboardViewSelector";
 import { CardTitleWithTooltip } from "@/components/dashboard/CardTitleWithTooltip";
@@ -49,9 +50,10 @@ export default async function DashboardPage({
   // Fire-and-forget: check for stale work items and create notification if needed
   checkAndCreateStalenessNotification(teamId).catch(() => {});
 
-  const [fullSnapshot, workItems] = await Promise.all([
+  const [fullSnapshot, workItems, teamMembers] = await Promise.all([
     getDefaultDashboardSnapshot(teamId, todayYmd),
     getWorkItemsForTeam(teamId),
+    getTeamMembers(teamId),
   ]);
 
   const horizonWeeksForView = fullSnapshot.horizonWeeks.slice(0, weeksInView);
@@ -351,6 +353,7 @@ export default async function DashboardPage({
         <WorkItemsTable
           teamId={teamId}
           items={top5WorkItems}
+          teamMembers={teamMembers}
           title="Committed work (top 5 by hours)"
           viewStartYmd={viewStartYmd}
           viewEndYmd={viewEndYmd}

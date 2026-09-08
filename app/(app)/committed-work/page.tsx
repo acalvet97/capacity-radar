@@ -5,6 +5,7 @@ import type { Metadata } from "next";
 import { getWorkItemsForTeam } from "@/lib/db/getWorkItemsForTeam";
 import { getTeamBufferAndCapacity } from "@/lib/db/getTeamSettings";
 import { getTeamIdForUser } from "@/lib/db/getTeamIdForUser";
+import { getTeamMembers } from "@/lib/db/getTeamMembers";
 import {
   DEFAULT_TZ,
   todayYmdInTz,
@@ -32,10 +33,12 @@ export default async function CommittedWorkPage({
 }) {
   const teamId = await getTeamIdForUser();
 
-  const [workItems, { weeklyAvailableCapacity }] = await Promise.all([
-    getWorkItemsForTeam(teamId),
-    getTeamBufferAndCapacity(teamId),
-  ]);
+  const [workItems, { weeklyAvailableCapacity }, teamMembers] =
+    await Promise.all([
+      getWorkItemsForTeam(teamId),
+      getTeamBufferAndCapacity(teamId),
+      getTeamMembers(teamId),
+    ]);
 
   const params = await searchParams;
   const view = normalizeViewSearchParam(params?.view);
@@ -75,6 +78,7 @@ export default async function CommittedWorkPage({
         <CommittedWorkList
           teamId={teamId}
           items={workItems}
+          teamMembers={teamMembers}
           viewStartYmd={viewStartYmd}
           viewEndYmd={viewEndYmd}
           weeklyCapacityHours={weeklyAvailableCapacity}
