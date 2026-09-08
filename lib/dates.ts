@@ -44,6 +44,17 @@ export function formatDateDdMmYyyy(dateStr: string): string {
   return `${day}/${m}/${y}`;
 }
 
+/** Compact calendar label, e.g. "3 Mar". */
+export function formatDateDMmm(dateStr: string): string {
+  const ymd = dateStr.slice(0, 10);
+  if (!isValidYmd(ymd)) return dateStr;
+  return new Intl.DateTimeFormat("en-GB", {
+    timeZone: "UTC",
+    day: "numeric",
+    month: "short",
+  }).format(ymdToUtcDate(ymd));
+}
+
 /**
  * Add N days to a UTC Date (safe for date-only logic).
  */

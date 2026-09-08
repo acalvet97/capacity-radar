@@ -5,9 +5,18 @@ import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { HOURS_STEP, sanitizeHoursInputAllowZero } from "@/lib/hours";
-import { cycleToWeekly, weeklyToCycle } from "@/lib/capacityUnits";
-import { type MemberRow, toMemberRows } from "@/lib/teamMemberRows";
+import { DailyHoursInputs } from "@/components/team/DailyHoursInputs";
+import { UnconfirmedHoursHint } from "@/components/team/UnconfirmedHoursHint";
+import {
+  type DayKey,
+  dailyHoursEqual,
+  dailyHoursFromInputs,
+  sanitizeDayHours,
+  sumDailyHours,
+  validateDailyHours,
+} from "@/lib/dailyHours";
+import { formatHoursForDisplay } from "@/lib/hours";
+import { type MemberRow, newMemberRow, toMemberRows } from "@/lib/teamMemberRows";
 import {
   updateTeamMembersHoursAction,
   createTeamMemberAction,
@@ -26,12 +35,21 @@ export function TeamCapacitySection({
   initialMembers: TeamMemberRow[];
 }) {
   const router = useRouter();
-  const [members, setMembers] = React.useState<MemberRow[]>(() => toMemberRows(initialMembers));
+  const [members, setMembers] = React.useState<MemberRow[]>(() =>
+    toMemberRows(initialMembers)
+  );
   const [isPending, startTransition] = React.useTransition();
   const nextNewIdRef = React.useRef(0);
 
+  React.useEffect(() => {
+    setMembers(toMemberRows(initialMembers));
+  }, [initialMembers]);
+
   const totalCapacity = React.useMemo(() => {
-    return members.reduce((sum, m) => sum + sanitizeHoursInputAllowZero(m.hoursInput), 0);
+    return members.reduce(
+      (sum, m) => sum + sumDailyHours(dailyHoursFromInputs(m.dailyHours)),
+      0
+    );
   }, [members]);
 
   const hasChanges = React.useMemo(() => {
@@ -41,11 +59,9 @@ export function TeamCapacitySection({
       existing.every((m) => {
         const orig = initialMembers.find((x) => x.id === m.id);
         if (!orig) return false;
-        const currentWeekly = sanitizeHoursInputAllowZero(m.hoursInput);
-        const origWeekly = cycleToWeekly(orig.hours_per_cycle);
         return (
           (m.name ?? null) === (orig.name ?? null) &&
-          currentWeekly === origWeekly
+          dailyHoursEqual(dailyHoursFromInputs(m.dailyHours), orig.daily_hours)
         );
       });
     const hasNew = members.some((m) => m.isNew);
@@ -61,33 +77,33 @@ export function TeamCapacitySection({
     });
   }
 
-  function handleHoursBlur(index: number) {
+  function handleDayChange(index: number, day: DayKey, raw: string) {
     setMembers((prev) => {
       const next = [...prev];
-      const sanitized = sanitizeHoursInputAllowZero(next[index].hoursInput);
-      next[index] = { ...next[index], hoursInput: String(sanitized) };
+      next[index] = {
+        ...next[index],
+        dailyHours: { ...next[index].dailyHours, [day]: raw },
+      };
       return next;
     });
   }
 
-  function handleHoursChange(index: number, value: string) {
+  function handleDayBlur(index: number, day: DayKey) {
     setMembers((prev) => {
       const next = [...prev];
-      next[index] = { ...next[index], hoursInput: value };
+      const sanitized = formatHoursForDisplay(
+        sanitizeDayHours(next[index].dailyHours[day])
+      );
+      next[index] = {
+        ...next[index],
+        dailyHours: { ...next[index].dailyHours, [day]: sanitized },
+      };
       return next;
     });
   }
 
   function handleAddMember() {
-    setMembers((prev) => [
-      ...prev,
-      {
-        id: `new-${++nextNewIdRef.current}`,
-        name: null,
-        hoursInput: "0",
-        isNew: true,
-      },
-    ]);
+    setMembers((prev) => [...prev, newMemberRow(`new-${++nextNewIdRef.current}`)]);
   }
 
   function handleDelete(index: number) {
@@ -108,6 +124,39 @@ export function TeamCapacitySection({
     });
   }
 
+  function handleConfirmSchedule(index: number) {
+    const row = members[index];
+    if (row.isNew || row.isDailyHoursConfirmed || isPending) return;
+
+    const dailyHours = dailyHoursFromInputs(row.dailyHours);
+    const hoursError = validateDailyHours(dailyHours);
+    if (hoursError) {
+      toast.error(hoursError);
+      return;
+    }
+
+    startTransition(async () => {
+      const res = await updateTeamMembersHoursAction(teamId, [
+        {
+          id: row.id,
+          name: row.name ?? null,
+          daily_hours: dailyHours,
+          confirmDailyHours: true,
+        },
+      ]);
+      if (!res.ok) {
+        toast.error(res.message);
+        return;
+      }
+      setMembers((prev) => {
+        const next = [...prev];
+        next[index] = { ...next[index], isDailyHoursConfirmed: true };
+        return next;
+      });
+      toast.success("Schedule confirmed.");
+    });
+  }
+
   function handleSave(e: React.FormEvent) {
     e.preventDefault();
     if (!hasChanges || isPending) return;
@@ -115,11 +164,19 @@ export function TeamCapacitySection({
     const existing = members.filter((m) => !m.isNew);
     const newRows = members.filter((m) => m.isNew);
 
+    for (const row of members) {
+      const hoursError = validateDailyHours(dailyHoursFromInputs(row.dailyHours));
+      if (hoursError) {
+        toast.error(hoursError);
+        return;
+      }
+    }
+
     startTransition(async () => {
       const updates: TeamMemberUpdate[] = existing.map((m) => ({
         id: m.id,
         name: m.name ?? null,
-        hours_per_cycle: weeklyToCycle(sanitizeHoursInputAllowZero(m.hoursInput)),
+        daily_hours: dailyHoursFromInputs(m.dailyHours),
       }));
       if (updates.length) {
         const res = await updateTeamMembersHoursAction(teamId, updates);
@@ -130,11 +187,10 @@ export function TeamCapacitySection({
       }
       for (const row of newRows) {
         const name = (row.name ?? "").trim() || "New member";
-        const hoursPerWeek = sanitizeHoursInputAllowZero(row.hoursInput);
         const res = await createTeamMemberAction(
           teamId,
           name,
-          weeklyToCycle(hoursPerWeek)
+          dailyHoursFromInputs(row.dailyHours)
         );
         if (!res.ok) {
           toast.error(res.message);
@@ -147,28 +203,27 @@ export function TeamCapacitySection({
   }
 
   return (
-    <Card className="rounded-md max-w-2xl">
+    <Card className="rounded-md">
       <CardHeader>
         <h2 className="text-base font-medium">Team Capacity</h2>
         <p className="text-sm text-muted-foreground mt-1">
-          Define how much work this team can deliver per week. Stored as a 4-week cycle in the
-          database.
+          Set how many hours each person works on each day of the week.
         </p>
       </CardHeader>
       <CardContent className="px-6">
         <form onSubmit={handleSave} className="space-y-4">
-          <div className="rounded-md border overflow-hidden">
+          <div className="rounded-md border overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b bg-muted">
-                  <th className="text-left font-medium px-3 py-2">Name</th>
-                  <th className="text-left font-medium px-3 py-2 w-[140px]">Hours per week</th>
+                  <th className="text-left font-medium px-3 py-2 min-w-[180px]">Name</th>
+                  <th className="text-left font-medium px-3 py-2">Hours by day</th>
                   <th className="w-10" />
                 </tr>
               </thead>
               <tbody>
                 {members.map((m, index) => (
-                  <tr key={m.id} className="border-b last:border-b-0">
+                  <tr key={m.id} className="border-b last:border-b-0 align-top">
                     <td className="px-3 py-2">
                       <Input
                         type="text"
@@ -178,18 +233,20 @@ export function TeamCapacitySection({
                         disabled={isPending}
                         className="h-8 max-w-[200px]"
                       />
+                      {!m.isNew && !m.isDailyHoursConfirmed ? (
+                        <UnconfirmedHoursHint
+                          disabled={isPending}
+                          onConfirm={() => handleConfirmSchedule(index)}
+                        />
+                      ) : null}
                     </td>
                     <td className="px-3 py-2">
-                      <Input
-                        type="number"
-                        min={0}
-                        step={HOURS_STEP}
-                        inputMode="decimal"
-                        value={m.hoursInput}
-                        onChange={(e) => handleHoursChange(index, e.target.value)}
-                        onBlur={() => handleHoursBlur(index)}
+                      <DailyHoursInputs
+                        idPrefix={`member-${m.id}`}
+                        value={m.dailyHours}
+                        onChange={(day, raw) => handleDayChange(index, day, raw)}
+                        onBlurDay={(day) => handleDayBlur(index, day)}
                         disabled={isPending}
-                        className="max-w-[120px] h-8"
                       />
                     </td>
                     <td className="px-2 py-2">
@@ -223,13 +280,12 @@ export function TeamCapacitySection({
             </Button>
             <p className="text-sm text-muted-foreground">
               Total weekly capacity:{" "}
-              <span className="font-medium text-foreground">{totalCapacity}h</span>
+              <span className="font-medium text-foreground">
+                {formatHoursForDisplay(totalCapacity)}h
+              </span>
             </p>
           </div>
-          <Button
-            type="submit"
-            disabled={!hasChanges || isPending}
-          >
+          <Button type="submit" disabled={!hasChanges || isPending}>
             {isPending ? "Saving…" : "Save changes"}
           </Button>
         </form>

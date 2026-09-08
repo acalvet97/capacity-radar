@@ -7,9 +7,17 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Trash2, Plus, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
-import { HOURS_STEP, sanitizeHoursInputAllowZero, sanitizeHoursInput } from "@/lib/hours";
-import { weeklyToCycle } from "@/lib/capacityUnits";
-import { type MemberRow, toMemberRows } from "@/lib/teamMemberRows";
+import { HOURS_STEP, sanitizeHoursInput, formatHoursForDisplay } from "@/lib/hours";
+import { DailyHoursInputs } from "@/components/team/DailyHoursInputs";
+import { UnconfirmedHoursHint } from "@/components/team/UnconfirmedHoursHint";
+import {
+  type DayKey,
+  dailyHoursFromInputs,
+  sanitizeDayHours,
+  sumDailyHours,
+  validateDailyHours,
+} from "@/lib/dailyHours";
+import { type MemberRow, newMemberRow, toMemberRows } from "@/lib/teamMemberRows";
 import {
   updateTeamMembersHoursAction,
   createTeamMemberAction,
@@ -31,10 +39,11 @@ export function Step2TeamSetup({
   teamId,
   initialMembers,
   initialBufferHoursPerWeek,
-  initialWeeklyCapacity,
   onContinue,
 }: Props) {
-  const [members, setMembers] = React.useState<MemberRow[]>(() => toMemberRows(initialMembers));
+  const [members, setMembers] = React.useState<MemberRow[]>(() =>
+    toMemberRows(initialMembers)
+  );
   const [bufferEnabled, setBufferEnabled] = React.useState(initialBufferHoursPerWeek > 0);
   const [bufferInput, setBufferInput] = React.useState(
     initialBufferHoursPerWeek > 0 ? String(initialBufferHoursPerWeek) : ""
@@ -42,8 +51,16 @@ export function Step2TeamSetup({
   const [isPending, startTransition] = React.useTransition();
   const nextNewIdRef = React.useRef(0);
 
+  React.useEffect(() => {
+    setMembers(toMemberRows(initialMembers));
+  }, [initialMembers]);
+
   const totalWeeklyHours = React.useMemo(
-    () => members.reduce((sum, m) => sum + sanitizeHoursInputAllowZero(m.hoursInput), 0),
+    () =>
+      members.reduce(
+        (sum, m) => sum + sumDailyHours(dailyHoursFromInputs(m.dailyHours)),
+        0
+      ),
     [members]
   );
 
@@ -60,30 +77,33 @@ export function Step2TeamSetup({
     });
   }
 
-  function handleHoursChange(index: number, value: string) {
-    setMembers((prev) => {
-      const next = [...prev];
-      next[index] = { ...next[index], hoursInput: value };
-      return next;
-    });
-  }
-
-  function handleHoursBlur(index: number) {
+  function handleDayChange(index: number, day: DayKey, raw: string) {
     setMembers((prev) => {
       const next = [...prev];
       next[index] = {
         ...next[index],
-        hoursInput: String(sanitizeHoursInputAllowZero(next[index].hoursInput)),
+        dailyHours: { ...next[index].dailyHours, [day]: raw },
+      };
+      return next;
+    });
+  }
+
+  function handleDayBlur(index: number, day: DayKey) {
+    setMembers((prev) => {
+      const next = [...prev];
+      const sanitized = formatHoursForDisplay(
+        sanitizeDayHours(next[index].dailyHours[day])
+      );
+      next[index] = {
+        ...next[index],
+        dailyHours: { ...next[index].dailyHours, [day]: sanitized },
       };
       return next;
     });
   }
 
   function handleAddMember() {
-    setMembers((prev) => [
-      ...prev,
-      { id: `new-${++nextNewIdRef.current}`, name: null, hoursInput: "40", isNew: true },
-    ]);
+    setMembers((prev) => [...prev, newMemberRow(`new-${++nextNewIdRef.current}`)]);
   }
 
   function handleDeleteMember(index: number) {
@@ -102,7 +122,47 @@ export function Step2TeamSetup({
     });
   }
 
+  function handleConfirmSchedule(index: number) {
+    const row = members[index];
+    if (row.isNew || row.isDailyHoursConfirmed || isPending) return;
+
+    const dailyHours = dailyHoursFromInputs(row.dailyHours);
+    const hoursError = validateDailyHours(dailyHours);
+    if (hoursError) {
+      toast.error(hoursError);
+      return;
+    }
+
+    startTransition(async () => {
+      const res = await updateTeamMembersHoursAction(teamId, [
+        {
+          id: row.id,
+          name: row.name ?? null,
+          daily_hours: dailyHours,
+          confirmDailyHours: true,
+        },
+      ]);
+      if (!res.ok) {
+        toast.error(res.message);
+        return;
+      }
+      setMembers((prev) => {
+        const next = [...prev];
+        next[index] = { ...next[index], isDailyHoursConfirmed: true };
+        return next;
+      });
+      toast.success("Schedule confirmed.");
+    });
+  }
+
   async function saveAllChanges() {
+    for (const row of members) {
+      const hoursError = validateDailyHours(dailyHoursFromInputs(row.dailyHours));
+      if (hoursError) {
+        throw new Error(hoursError);
+      }
+    }
+
     const existingMembers = members.filter((m) => !m.isNew);
     const newMembers = members.filter((m) => m.isNew);
 
@@ -110,7 +170,7 @@ export function Step2TeamSetup({
       const updates: TeamMemberUpdate[] = existingMembers.map((m) => ({
         id: m.id,
         name: m.name ?? null,
-        hours_per_cycle: weeklyToCycle(sanitizeHoursInputAllowZero(m.hoursInput)),
+        daily_hours: dailyHoursFromInputs(m.dailyHours),
       }));
       const res = await updateTeamMembersHoursAction(teamId, updates);
       if (!res.ok) throw new Error(res.message);
@@ -121,7 +181,7 @@ export function Step2TeamSetup({
       const res = await createTeamMemberAction(
         teamId,
         name,
-        weeklyToCycle(sanitizeHoursInputAllowZero(row.hoursInput))
+        dailyHoursFromInputs(row.dailyHours)
       );
       if (!res.ok) throw new Error(res.message);
     }
@@ -151,19 +211,19 @@ export function Step2TeamSetup({
       <div className="space-y-1">
         <h1 className="text-2xl font-medium tracking-tight">Set up your team</h1>
         <p className="text-muted-foreground">
-          Add your team members and their weekly hours so Klira can calculate capacity.
+          Add your team members and how many hours they work each day so Klira can
+          calculate capacity.
         </p>
       </div>
 
-      {/* Member table */}
       <div className="space-y-3">
         <h2 className="text-sm font-medium">Team members</h2>
-        <div className="rounded-md border overflow-hidden">
+        <div className="rounded-md border overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b bg-muted">
-                <th className="text-left font-medium px-3 py-2">Name</th>
-                <th className="text-left font-medium px-3 py-2 w-[160px]">Hours / week</th>
+                <th className="text-left font-medium px-3 py-2 min-w-[180px]">Name</th>
+                <th className="text-left font-medium px-3 py-2">Hours by day</th>
                 <th className="w-10" />
               </tr>
             </thead>
@@ -176,7 +236,7 @@ export function Step2TeamSetup({
                 </tr>
               )}
               {members.map((m, index) => (
-                <tr key={m.id} className="border-b last:border-b-0">
+                <tr key={m.id} className="border-b last:border-b-0 align-top">
                   <td className="px-3 py-2">
                     <Input
                       type="text"
@@ -186,18 +246,20 @@ export function Step2TeamSetup({
                       disabled={isPending}
                       className="h-8 max-w-[200px]"
                     />
+                    {!m.isNew && !m.isDailyHoursConfirmed ? (
+                      <UnconfirmedHoursHint
+                        disabled={isPending}
+                        onConfirm={() => handleConfirmSchedule(index)}
+                      />
+                    ) : null}
                   </td>
                   <td className="px-3 py-2">
-                    <Input
-                      type="number"
-                      min={0}
-                      step={HOURS_STEP}
-                      inputMode="decimal"
-                      value={m.hoursInput}
-                      onChange={(e) => handleHoursChange(index, e.target.value)}
-                      onBlur={() => handleHoursBlur(index)}
+                    <DailyHoursInputs
+                      idPrefix={`onboarding-member-${m.id}`}
+                      value={m.dailyHours}
+                      onChange={(day, raw) => handleDayChange(index, day, raw)}
+                      onBlurDay={(day) => handleDayBlur(index, day)}
                       disabled={isPending}
-                      className="max-w-[120px] h-8"
                     />
                   </td>
                   <td className="px-2 py-2">
@@ -231,7 +293,6 @@ export function Step2TeamSetup({
         </Button>
       </div>
 
-      {/* Buffer / reserved capacity */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <div>
@@ -269,11 +330,10 @@ export function Step2TeamSetup({
         )}
       </div>
 
-      {/* Capacity summary */}
       <div className="rounded-md border bg-muted/40 p-4 space-y-1 font-mono text-sm">
         <div className="flex justify-between">
           <span className="text-muted-foreground">Total weekly hours</span>
-          <span className="font-medium">{totalWeeklyHours}h</span>
+          <span className="font-medium">{formatHoursForDisplay(totalWeeklyHours)}h</span>
         </div>
         <div className="flex justify-between">
           <span className="text-muted-foreground">Buffer</span>
@@ -282,11 +342,12 @@ export function Step2TeamSetup({
         <div className="border-t border-border my-1" />
         <div className="flex justify-between">
           <span className="font-medium text-foreground">Usable capacity</span>
-          <span className="font-medium text-foreground">{usableCapacity}h / week</span>
+          <span className="font-medium text-foreground">
+            {formatHoursForDisplay(usableCapacity)}h / week
+          </span>
         </div>
       </div>
 
-      {/* No members warning */}
       {showNoMembersWarning && (
         <p className="text-sm text-amber-600 dark:text-amber-400">
           You haven&apos;t added any team members yet. Klira needs this to calculate capacity.

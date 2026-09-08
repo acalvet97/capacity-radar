@@ -32,13 +32,15 @@ type PhaseFields = {
   deadline: string;
   estimatedHours: number;
   ownerMemberId: string | null;
+  startDate?: string | null;
 };
 
 type ValidatedPhaseFields = {
   p_name: string;
   p_deadline: string;
   p_estimated_hours: number;
-  p_owner_member_id: string | null;
+  p_owner_member_id: string;
+  p_start_date: string | null;
 };
 
 function validatePhaseFields(
@@ -62,7 +64,26 @@ function validatePhaseFields(
     };
   }
 
-  const ownerMemberId = input.ownerMemberId?.trim() || null;
+  const ownerMemberId = input.ownerMemberId?.trim() || "";
+  if (!ownerMemberId) {
+    return { ok: false, message: "Phase owner is required." };
+  }
+
+  const startDate = input.startDate?.trim() || "";
+  if (startDate) {
+    if (!isValidYmd(startDate)) {
+      return {
+        ok: false,
+        message: "Phase start date must be a valid YYYY-MM-DD date.",
+      };
+    }
+    if (startDate > deadline) {
+      return {
+        ok: false,
+        message: "Start date must be on or before the deadline.",
+      };
+    }
+  }
 
   return {
     ok: true,
@@ -71,6 +92,7 @@ function validatePhaseFields(
       p_deadline: deadline,
       p_estimated_hours: hours,
       p_owner_member_id: ownerMemberId,
+      p_start_date: startDate || null,
     },
   };
 }

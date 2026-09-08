@@ -222,6 +222,7 @@ export function WorkItemEditSheet({
           workItemId={item.id}
           phases={item.phases}
           teamMembers={teamMembers}
+          workItemStartDate={draftStart}
           disabled={isPending}
         />
 

@@ -9,8 +9,10 @@
 export type WorkItemPhaseRow = {
   id: string;
   name: string;
-  /** References team_members.id. Null when the phase is unassigned. */
+  /** References team_members.id. Null only after ON DELETE SET NULL. */
   owner_member_id: string | null;
+  /** Explicit start. Null means infer from the previous phase or work item. */
+  start_date: string | null;
   deadline: string;
   estimated_hours: number;
   /** Display sequence, not necessarily chronological. */
@@ -19,11 +21,12 @@ export type WorkItemPhaseRow = {
 
 /** Columns selected for a phase, as a PostgREST nested-select fragment. */
 export const WORK_ITEM_PHASE_COLUMNS =
-  "id, name, owner_member_id, deadline, estimated_hours, sort_order";
+  "id, name, owner_member_id, start_date, deadline, estimated_hours, sort_order";
 
 /**
- * Owner is captured for accountability and display only. Capacity stays
- * team-level in this release, so nothing here feeds the capacity engine.
+ * Owner is required in the UI so the allocation preview has a real daily cap.
+ * Capacity evaluation still stays team-level until the engine consumes this
+ * curve; a missing owner (cascade) just hides the preview.
  */
 export function phaseOwnerName(
   phase: WorkItemPhaseRow,

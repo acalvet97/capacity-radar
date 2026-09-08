@@ -69,6 +69,7 @@ export const getWorkItemsForTeam = cache(
         id: phase.id,
         name: phase.name,
         owner_member_id: phase.owner_member_id,
+        start_date: phase.start_date ?? null,
         deadline: phase.deadline,
         estimated_hours: Number(phase.estimated_hours ?? 0),
         sort_order: phase.sort_order,
