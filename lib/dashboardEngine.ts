@@ -18,7 +18,11 @@ import {
   getWeeklyAvailableCapacity,
   getTotalCapacityForHorizonWeeks,
 } from "@/lib/teamCapacity";
-import { type Bucket, exposureBucketFromUtilization } from "@/lib/dashboardConstants";
+import {
+  type Bucket,
+  exposureBucketFromUtilization,
+  utilizationPct,
+} from "@/lib/dashboardConstants";
 import {
   getStackedDailyHours,
   stackedHoursInWeek,
@@ -119,7 +123,7 @@ function kpisFromHorizon(
     Math.max(
       0,
       ...horizonWeeks.map((w) =>
-        w.capacityHours > 0 ? (w.committedHours / w.capacityHours) * 100 : 0
+        utilizationPct(w.committedHours, w.capacityHours)
       )
     )
   );

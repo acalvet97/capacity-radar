@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { DEFAULT_TZ, todayYmdInTz } from "@/lib/dates";
 import { supabaseServer } from "@/lib/supabaseServer";
 import type { ImportedWorkItem } from "@/lib/types/importedWorkItem";
 import { NextResponse } from "next/server";
@@ -25,7 +26,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const today = new Date().toISOString().split("T")[0];
+  const today = todayYmdInTz(DEFAULT_TZ);
 
   const systemPrompt = `You are a work item parser for a project management tool. 
 Extract all projects or tasks from the user's text and return 

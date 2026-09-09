@@ -1,6 +1,9 @@
 // lib/evaluateEngine.ts
 import type { DashboardSnapshot, WeekSnapshot } from "@/lib/dashboardEngine";
-import { exposureBucketFromUtilization } from "@/lib/dashboardConstants";
+import {
+  exposureBucketFromUtilization,
+  utilizationPct,
+} from "@/lib/dashboardConstants";
 import { clamp, round1 } from "@/lib/utils";
 import type { TeamMemberRow } from "@/lib/db/getTeamMembers";
 import type { WorkItemRow } from "@/lib/db/getWorkItemsForTeam";
@@ -204,7 +207,7 @@ export function recomputeSnapshot(
     Math.max(
       0,
       ...newHorizon.map((w) =>
-        w.capacityHours > 0 ? (w.committedHours / w.capacityHours) * 100 : 0
+        utilizationPct(w.committedHours, w.capacityHours)
       )
     )
   );

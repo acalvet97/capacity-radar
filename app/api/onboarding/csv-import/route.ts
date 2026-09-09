@@ -1,3 +1,4 @@
+import { DEFAULT_TZ, todayYmdInTz } from "@/lib/dates";
 import { supabaseServer } from "@/lib/supabaseServer";
 import type { ImportedWorkItem } from "@/lib/types/importedWorkItem";
 import { NextResponse } from "next/server";
@@ -107,7 +108,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const today = new Date().toISOString().split("T")[0];
+  const today = todayYmdInTz(DEFAULT_TZ);
   const items: ImportedWorkItem[] = [];
 
   for (let i = 1; i < rows.length; i++) {

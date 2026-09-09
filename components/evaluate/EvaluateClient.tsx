@@ -18,6 +18,7 @@ import {
 import { WeekUtilizationBar } from "@/components/dashboard/WeekUtilizationBar";
 
 import type { DashboardSnapshot } from "@/lib/dashboardEngine";
+import { utilizationPct } from "@/lib/dashboardConstants";
 import { isValidYmd } from "@/lib/dates";
 import type { TeamMemberRow } from "@/lib/db/getTeamMembers";
 import type { WorkItemRow } from "@/lib/db/getWorkItemsForTeam";
@@ -152,8 +153,12 @@ function buildResultCardData(result: EvaluateResult): ResultCardData {
     const before = result.before.horizonWeeks[idx];
     return {
       weekLabel: after.weekLabel,
-      beforePct: Math.round((before.committedHours / before.capacityHours) * 100),
-      afterPct: Math.round((after.committedHours / after.capacityHours) * 100),
+      beforePct: Math.round(
+        utilizationPct(before.committedHours, before.capacityHours)
+      ),
+      afterPct: Math.round(
+        utilizationPct(after.committedHours, after.capacityHours)
+      ),
       capacityHours: after.capacityHours,
       committedHours: after.committedHours,
       bufferHoursPerWeek: result.after.bufferHoursPerWeek,

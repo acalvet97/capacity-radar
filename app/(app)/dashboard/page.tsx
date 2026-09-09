@@ -22,6 +22,7 @@ import {
   EXPOSURE_BADGE_STYLES,
   exposureBucketLabel,
   getViewLabel,
+  utilizationPct,
 } from "@/lib/dashboardConstants";
 import { DEFAULT_TZ, todayYmdInTz, formatDateDdMmYyyy } from "@/lib/dates";
 import { normalizeViewSearchParam, weeksForHorizonView } from "@/lib/horizonView";
@@ -76,8 +77,14 @@ export default async function DashboardPage({
 
   const atRiskWeeks = horizonWeeksForView
     .map((week) => {
-      const utilizationPct = Math.round((week.committedHours / week.capacityHours) * 100);
-      return { ...week, utilizationPct, bucket: exposureBucketFromUtilization(utilizationPct) };
+      const pct = Math.round(
+        utilizationPct(week.committedHours, week.capacityHours)
+      );
+      return {
+        ...week,
+        utilizationPct: pct,
+        bucket: exposureBucketFromUtilization(pct),
+      };
     })
     .filter((w) => w.utilizationPct > 90);
 
@@ -85,16 +92,17 @@ export default async function DashboardPage({
   const freeHoursThisWeek = thisWeek
     ? Math.max(0, Math.round(thisWeek.capacityHours - thisWeek.committedHours))
     : 0;
-  const thisWeekUtilizationPct = thisWeek && thisWeek.capacityHours > 0
-    ? Math.round((thisWeek.committedHours / thisWeek.capacityHours) * 100)
+  const thisWeekUtilizationPct = thisWeek
+    ? Math.round(utilizationPct(thisWeek.committedHours, thisWeek.capacityHours))
     : 0;
 
   const BREATHING_ROOM_THRESHOLD_PCT = 70;
-  const nextBreathingRoomWeek = horizonWeeksForView.find(w => {
-    if (w.capacityHours <= 0) return false;
-    const pct = (w.committedHours / w.capacityHours) * 100;
-    return pct < BREATHING_ROOM_THRESHOLD_PCT;
-  }) ?? null;
+  const nextBreathingRoomWeek = horizonWeeksForView.find(
+    (w) =>
+      w.capacityHours > 0 &&
+      utilizationPct(w.committedHours, w.capacityHours) <
+        BREATHING_ROOM_THRESHOLD_PCT
+  ) ?? null;
   const breathingRoomFreeHours = nextBreathingRoomWeek
     ? Math.max(0, Math.round(
         nextBreathingRoomWeek.capacityHours - nextBreathingRoomWeek.committedHours
@@ -205,7 +213,9 @@ export default async function DashboardPage({
             </CardHeader>
             <CardContent className="space-y-4">
               {horizonWeeksForView.map((week) => {
-                const utilization = Math.round((week.committedHours / week.capacityHours) * 100);
+                const utilization = Math.round(
+                  utilizationPct(week.committedHours, week.capacityHours)
+                );
                 return (
                   <div key={week.weekStartYmd} className="space-y-2">
                     <div className="flex items-center justify-between gap-4 text-sm">

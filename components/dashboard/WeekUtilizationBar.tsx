@@ -1,6 +1,10 @@
 "use client";
 
-import { exposureBucketFromUtilization, EXPOSURE_BAR_FILL } from "@/lib/dashboardConstants";
+import {
+  exposureBucketFromUtilization,
+  EXPOSURE_BAR_FILL,
+  utilizationPct,
+} from "@/lib/dashboardConstants";
 
 type Props = {
   capacityHours: number;
@@ -18,7 +22,7 @@ export function WeekUtilizationBar({
   bufferHoursPerWeek = 0,
 }: Props) {
   // Color is based on utilization of *available* capacity (total minus buffer)
-  const utilization = capacityHours > 0 ? Math.round((committedHours / capacityHours) * 100) : 0;
+  const utilization = Math.round(utilizationPct(committedHours, capacityHours));
   const bucket = exposureBucketFromUtilization(utilization);
 
   // Bar widths are relative to *total* capacity (available + buffer) so proportions are correct

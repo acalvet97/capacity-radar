@@ -1,3 +1,10 @@
+import {
+  DEFAULT_TZ,
+  addDaysUtc,
+  todayYmdInTz,
+  utcDateToYmd,
+  ymdToUtcDate,
+} from "@/lib/dates";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { supabaseServer } from "@/lib/supabaseServer";
 
@@ -12,13 +19,10 @@ export async function checkAndCreateStalenessNotification(teamId: string): Promi
   if (!user) return;
 
   const admin = supabaseAdmin();
-  const today = new Date();
-  const todayYmd = today.toISOString().split("T")[0];
-
-  // 7 days from today
-  const sevenDaysLater = new Date(today);
-  sevenDaysLater.setDate(today.getDate() + 7);
-  const sevenDaysLaterYmd = sevenDaysLater.toISOString().split("T")[0];
+  const todayYmd = todayYmdInTz(DEFAULT_TZ);
+  const sevenDaysLaterYmd = utcDateToYmd(
+    addDaysUtc(ymdToUtcDate(todayYmd), 7)
+  );
 
   // Find work items with imminent deadlines that have never been edited
   const { data: staleItems, error: itemsError } = await admin

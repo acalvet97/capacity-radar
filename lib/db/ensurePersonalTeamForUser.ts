@@ -1,5 +1,12 @@
 import { cache } from "react";
 import type { User } from "@supabase/supabase-js";
+import {
+  DEFAULT_TZ,
+  addDaysUtc,
+  todayYmdInTz,
+  utcDateToYmd,
+  ymdToUtcDate,
+} from "@/lib/dates";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 export type OwnerTeamRow = {
@@ -55,9 +62,8 @@ export async function ensurePersonalTeamForUser(
     (user.user_metadata?.team_name as string | undefined) ||
     (user.email ? user.email.split("@")[0] : "My Team");
 
-  const today = new Date();
-  const cycleEnd = new Date(today);
-  cycleEnd.setDate(today.getDate() + 28);
+  const todayYmd = todayYmdInTz(DEFAULT_TZ);
+  const cycleEndYmd = utcDateToYmd(addDaysUtc(ymdToUtcDate(todayYmd), 28));
 
   const admin = supabaseAdmin();
 
@@ -81,8 +87,8 @@ export async function ensurePersonalTeamForUser(
     name: teamName,
     owner_user_id: user.id,
     company_id: company.id,
-    cycle_start_date: today.toISOString().split("T")[0],
-    cycle_end_date: cycleEnd.toISOString().split("T")[0],
+    cycle_start_date: todayYmd,
+    cycle_end_date: cycleEndYmd,
     buffer_hours_per_week: 0,
   });
 

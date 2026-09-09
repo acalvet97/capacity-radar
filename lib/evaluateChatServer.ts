@@ -1,3 +1,4 @@
+import { utilizationPct } from "@/lib/dashboardConstants";
 import type { DashboardSnapshot } from "@/lib/dashboardEngine";
 import { formatHoursForDisplay } from "@/lib/hours";
 
@@ -23,7 +24,7 @@ export function buildSnapshotDigest(
       freeHours: Math.max(0, w.capacityHours - w.committedHours),
       utilizationPct:
         w.capacityHours > 0
-          ? Math.round((w.committedHours / w.capacityHours) * 100)
+          ? Math.round(utilizationPct(w.committedHours, w.capacityHours))
           : 0,
     }))
     .sort((a, b) => b.freeHours - a.freeHours);
@@ -50,7 +51,7 @@ export function buildSnapshotDigest(
     ...weeks.map((w) => {
       const free = Math.max(0, w.capacityHours - w.committedHours);
       const pct =
-        w.capacityHours > 0 ? Math.round((w.committedHours / w.capacityHours) * 100) : 0;
+        Math.round(utilizationPct(w.committedHours, w.capacityHours));
       return `  ${w.weekLabel} | ${w.committedHours}h | ${w.capacityHours}h avail | ${free}h free | ${pct}%`;
     }),
     "",

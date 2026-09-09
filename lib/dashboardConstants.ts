@@ -3,6 +3,21 @@
 
 export type Bucket = "low" | "medium" | "high";
 
+/**
+ * Committed hours as a percentage of capacity, unrounded.
+ *
+ * Zero capacity yields 0, not NaN: a team with no confirmed hours is a real
+ * state (before onboarding finishes, or with every member's schedule empty),
+ * and the unguarded division rendered "NaN%" on the dashboard.
+ */
+export function utilizationPct(
+  committedHours: number,
+  capacityHours: number
+): number {
+  if (!(capacityHours > 0)) return 0;
+  return (committedHours / capacityHours) * 100;
+}
+
 /** Single source of truth: map utilization % to exposure bucket. */
 export function exposureBucketFromUtilization(pct: number): Bucket {
   if (pct < 80) return "low";
