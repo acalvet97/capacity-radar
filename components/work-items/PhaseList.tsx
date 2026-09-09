@@ -38,19 +38,12 @@ import {
   sanitizeHoursInput,
 } from "@/lib/hours";
 import { formatDateDMmm, formatDateDdMmYyyy } from "@/lib/dates";
-import {
-  computeFrontLoadAllocation,
-  isStartAfterDeadline,
-  resolvePhaseStartDate,
-  type FrontLoadAllocation,
-} from "@/lib/phaseAllocation";
 import { PhaseAllocationPreview } from "@/components/work-items/PhaseAllocationPreview";
 import type { WorkItemRow } from "@/lib/db/getWorkItemsForTeam";
 import {
-  evaluateHypotheticalAddition,
-  getStackedDailyHours,
-  type EdfKey,
-} from "@/lib/capacityStacking";
+  allocationViewFor,
+  type AllocationView,
+} from "@/lib/phaseAllocationView";
 
 export type PhaseDraft = {
   name: string;
@@ -78,6 +71,17 @@ function draftFromPhase(phase: WorkItemPhaseRow): PhaseDraft {
   };
 }
 
+/** A phase with no explicit start begins the day after the previous one ends. */
+function previousDeadlineFor(
+  phases: WorkItemPhaseRow[],
+  index: number | "new"
+): string | null {
+  if (index === "new") {
+    return phases[phases.length - 1]?.deadline ?? null;
+  }
+  return index > 0 ? phases[index - 1]?.deadline ?? null : null;
+}
+
 function memberLabel(member: TeamMemberRow): string {
   return member.name?.trim() || "Unnamed member";
 }
@@ -86,106 +90,6 @@ function hoursFromDraft(hours: string): number {
   const raw = Number(hours);
   if (!Number.isFinite(raw) || raw <= 0) return 0;
   return sanitizeHoursInput(hours);
-}
-
-type AllocationView = {
-  owner: TeamMemberRow | null;
-  resolvedStart: string | null;
-  inferredStart: string | null;
-  explicitInverted: boolean;
-  inferredInverted: boolean;
-  allocation: FrontLoadAllocation | null;
-  stackingLeftoverHours: number;
-  deadline: string;
-};
-
-function allocationViewFor(input: {
-  ownerMemberId: string;
-  startDate: string;
-  deadline: string;
-  hours: number;
-  previousDeadline: string | null;
-  workItemStartDate: string;
-  teamMembers: TeamMemberRow[];
-  allWorkItems: WorkItemRow[];
-  excludePhaseId?: string | null;
-  edfKey: EdfKey;
-}): AllocationView {
-  const owner =
-    input.teamMembers.find((member) => member.id === input.ownerMemberId) ??
-    null;
-  const explicit = input.startDate.trim();
-  const inferredStart = resolvePhaseStartDate({
-    startDate: null,
-    previousDeadline: input.previousDeadline,
-    workItemStartDate: input.workItemStartDate,
-  });
-  const resolvedStart = resolvePhaseStartDate({
-    startDate: explicit || null,
-    previousDeadline: input.previousDeadline,
-    workItemStartDate: input.workItemStartDate,
-  });
-  const deadline = input.deadline.trim();
-  const explicitInverted = Boolean(
-    explicit && deadline && isStartAfterDeadline(explicit, deadline)
-  );
-  const inferredInverted = Boolean(
-    !explicit &&
-      resolvedStart &&
-      deadline &&
-      isStartAfterDeadline(resolvedStart, deadline)
-  );
-
-  let allocation: FrontLoadAllocation | null = null;
-  let stackingLeftoverHours = 0;
-  if (
-    owner &&
-    resolvedStart &&
-    deadline &&
-    input.hours > 0 &&
-    !explicitInverted &&
-    !inferredInverted
-  ) {
-    allocation = computeFrontLoadAllocation({
-      startDate: resolvedStart,
-      deadline,
-      totalHours: input.hours,
-      dailyHours: owner.daily_hours,
-    });
-    const stacked = getStackedDailyHours({
-      memberId: owner.id,
-      range: { start: resolvedStart, end: deadline },
-      workItems: input.allWorkItems,
-      members: input.teamMembers,
-      excludePhaseId: input.excludePhaseId,
-      onlyBefore: {
-        deadline,
-        startDate: resolvedStart,
-        sortOrder: input.edfKey.sortOrder,
-        id: input.edfKey.id,
-      },
-    });
-    stackingLeftoverHours = evaluateHypotheticalAddition({
-      hypotheticalPhase: {
-        startDate: resolvedStart,
-        totalHours: input.hours,
-        rangeEnd: deadline,
-      },
-      existingStackedHours: stacked,
-      dailyHours: owner.daily_hours,
-    }).leftoverHours;
-  }
-
-  return {
-    owner,
-    resolvedStart,
-    inferredStart,
-    explicitInverted,
-    inferredInverted,
-    allocation,
-    stackingLeftoverHours,
-    deadline,
-  };
 }
 
 function PhaseAllocationNotes({
@@ -285,12 +189,32 @@ export function PhaseList({
   const busy = disabled || isPending;
   const hasMembers = teamMembers.length > 0;
 
-  function previousDeadlineAt(index: number | "new"): string | null {
-    if (index === "new") {
-      return phases[phases.length - 1]?.deadline ?? null;
-    }
-    return index > 0 ? phases[index - 1]?.deadline ?? null : null;
-  }
+  // Saved rows don't depend on the edit draft, so they must not recompute on
+  // every keystroke: each allocationViewFor call walks every work item and
+  // phase owned by that member.
+  const savedViews: AllocationView[] = React.useMemo(
+    () =>
+      phases.map((phase, index) => {
+        return allocationViewFor({
+          ownerMemberId: phase.owner_member_id ?? "",
+          startDate: phase.start_date ?? "",
+          deadline: phase.deadline,
+          hours: phase.estimated_hours,
+          previousDeadline: previousDeadlineFor(phases, index),
+          workItemStartDate,
+          teamMembers,
+          allWorkItems,
+          excludePhaseId: phase.id,
+          edfKey: {
+            deadline: phase.deadline,
+            startDate: phase.start_date ?? "",
+            sortOrder: phase.sort_order,
+            id: phase.id,
+          },
+        });
+      }),
+    [phases, teamMembers, allWorkItems, workItemStartDate]
+  );
 
   function ownerNameFor(phase: WorkItemPhaseRow): string {
     if (!phase.owner_member_id) return "Unassigned";
@@ -595,23 +519,7 @@ export function PhaseList({
         <ul className="divide-y rounded-md border">
           {phases.map((phase, index) => {
             const isEditing = editingId === phase.id;
-            const savedView = allocationViewFor({
-              ownerMemberId: phase.owner_member_id ?? "",
-              startDate: phase.start_date ?? "",
-              deadline: phase.deadline,
-              hours: phase.estimated_hours,
-              previousDeadline: previousDeadlineAt(index),
-              workItemStartDate,
-              teamMembers,
-              allWorkItems,
-              excludePhaseId: phase.id,
-              edfKey: {
-                deadline: phase.deadline,
-                startDate: phase.start_date ?? "",
-                sortOrder: phase.sort_order,
-                id: phase.id,
-              },
-            });
+            const savedView = savedViews[index];
             const spanLabel =
               savedView.resolvedStart && !savedView.inferredInverted
                 ? `${formatDateDMmm(savedView.resolvedStart)} – ${formatDateDMmm(phase.deadline)}`
@@ -625,7 +533,7 @@ export function PhaseList({
                       draft,
                       setDraft,
                       `phase-${phase.id}`,
-                      previousDeadlineAt(index)
+                      previousDeadlineFor(phases, index)
                     )}
                     <div className="flex justify-end gap-2">
                       <Button
@@ -733,7 +641,7 @@ export function PhaseList({
             addDraft,
             setAddDraft,
             "phase-new",
-            previousDeadlineAt("new")
+            previousDeadlineFor(phases, "new")
           )}
           <div className="flex justify-end gap-2">
             <Button
