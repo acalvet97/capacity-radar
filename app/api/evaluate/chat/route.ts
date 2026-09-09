@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { supabaseServer } from "@/lib/supabaseServer";
+import { getCurrentUser } from "@/lib/auth/currentUser";
 import { NextResponse } from "next/server";
 
 import type {
@@ -80,10 +80,7 @@ function parseStructuredData(jsonStr: string): {
 }
 
 export async function POST(req: Request) {
-  const supabase = await supabaseServer();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

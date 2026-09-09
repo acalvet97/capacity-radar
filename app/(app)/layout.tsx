@@ -1,7 +1,7 @@
 import { AppSidebar } from "@/components/layout/AppSidebar";
 import { TopBar } from "@/components/layout/TopBar";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
-import { supabaseServer } from "@/lib/supabaseServer";
+import { getCurrentUser } from "@/lib/auth/currentUser";
 import { getTeamRowForOwnerAdmin } from "@/lib/db/ensurePersonalTeamForUser";
 import { redirect } from "next/navigation";
 import { AskKliraProvider } from "@/context/AskKliraContext";
@@ -11,10 +11,7 @@ import { getWorkItemsForTeam, type WorkItemRow } from "@/lib/db/getWorkItemsForT
 import { DEFAULT_TZ, todayYmdInTz } from "@/lib/dates";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const supabase = await supabaseServer();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
 
   let teamIdForSnapshot: string | null = null;
   if (user) {

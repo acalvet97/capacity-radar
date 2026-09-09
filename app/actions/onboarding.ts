@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import type { ActionResult } from "@/lib/actionResult";
-import { supabaseServer } from "@/lib/supabaseServer";
+import { getCurrentUser } from "@/lib/auth/currentUser";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 export async function updateWorkspaceNameAction(
@@ -11,8 +11,7 @@ export async function updateWorkspaceNameAction(
   const trimmed = name.trim();
   if (!trimmed) return { ok: false, message: "Team name cannot be empty." };
 
-  const supabase = await supabaseServer();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   if (!user) return { ok: false, message: "Not authenticated." };
 
   const { error } = await supabaseAdmin()

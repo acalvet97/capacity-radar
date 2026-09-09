@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 export const metadata: Metadata = { title: "Account" };
 
-import { supabaseServer } from '@/lib/supabaseServer';
+import { getCurrentUser } from '@/lib/auth/currentUser';
 import { ensurePersonalTeamForUser } from '@/lib/db/ensurePersonalTeamForUser';
 import { AccountClient } from '@/components/account/AccountClient';
 import { redirect } from 'next/navigation';
@@ -10,9 +10,7 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export default async function AccountPage() {
-  const supabase = await supabaseServer();
-
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   if (!user) redirect('/login');
 
   const team = await ensurePersonalTeamForUser(user);

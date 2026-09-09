@@ -1,15 +1,16 @@
 import { supabaseServer } from "@/lib/supabaseServer";
+import { getCurrentUser } from "@/lib/auth/currentUser";
 import { getTeamIdForUser } from "@/lib/db/getTeamIdForUser";
 import { getTeamName } from "@/lib/db/getTeamName";
 import { NotificationBell } from "./NotificationBell";
 import { TopBarBreadcrumbs } from "./TopBarBreadcrumbs";
 
 export async function TopBar() {
-  const supabase = await supabaseServer();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
 
   let initialNotifications: Parameters<typeof NotificationBell>[0]["initialNotifications"] = [];
   if (user) {
+    const supabase = await supabaseServer();
     const { data } = await supabase
       .from("notifications")
       .select("id, type, payload, created_at, read_at")

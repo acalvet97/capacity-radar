@@ -1,3 +1,4 @@
+import { cache } from "react";
 import type { User } from "@supabase/supabase-js";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
@@ -11,10 +12,12 @@ export type OwnerTeamRow = {
  * Read one owning team row bypassing RLS (server-only, after auth).
  * Uses a stable ordering + limit because duplicate rows for the same owner
  * can exist (retries / races); `.maybeSingle()` errors when multiple match.
+ *
+ * Uncached on purpose: ensurePersonalTeamForUser calls this to read back a row
+ * it just inserted, which a request-scoped memo of the earlier "does it exist"
+ * miss would answer with a stale null.
  */
-export async function getTeamRowForOwnerAdmin(
-  userId: string
-): Promise<OwnerTeamRow | null> {
+async function readOwnedTeam(userId: string): Promise<OwnerTeamRow | null> {
   const admin = supabaseAdmin();
   const { data: rows, error } = await admin
     .from("teams")
@@ -30,6 +33,12 @@ export async function getTeamRowForOwnerAdmin(
   const row = rows?.[0];
   return row ? (row as OwnerTeamRow) : null;
 }
+
+/**
+ * Request-scoped read for callers that only read. The app layout and
+ * ensurePersonalTeamForUser's existence check both run in one render.
+ */
+export const getTeamRowForOwnerAdmin = cache(readOwnedTeam);
 
 /**
  * Ensures the user has a personal company + team row (owner). Idempotent.
@@ -65,7 +74,7 @@ export async function ensurePersonalTeamForUser(
       companyError?.details,
       companyError?.hint
     );
-    return (await getTeamRowForOwnerAdmin(user.id)) ?? null;
+    return (await readOwnedTeam(user.id)) ?? null;
   }
 
   const { error: teamError } = await admin.from("teams").insert({
@@ -86,5 +95,5 @@ export async function ensurePersonalTeamForUser(
     );
   }
 
-  return (await getTeamRowForOwnerAdmin(user.id)) ?? null;
+  return (await readOwnedTeam(user.id)) ?? null;
 }

@@ -5,15 +5,14 @@ import type { Metadata } from "next";
 export const metadata: Metadata = { title: "Get Started" };
 
 import { redirect } from "next/navigation";
-import { supabaseServer } from "@/lib/supabaseServer";
+import { getCurrentUser } from "@/lib/auth/currentUser";
 import { ensurePersonalTeamForUser } from "@/lib/db/ensurePersonalTeamForUser";
 import { getTeamMembers } from "@/lib/db/getTeamMembers";
 import { getTeamBufferAndCapacity } from "@/lib/db/getTeamSettings";
 import { OnboardingWizard } from "./OnboardingWizard";
 
 export default async function OnboardingPage() {
-  const supabase = await supabaseServer();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   if (!user) redirect("/login");
 
   const team = await ensurePersonalTeamForUser(user);

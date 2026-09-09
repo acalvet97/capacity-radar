@@ -8,14 +8,13 @@ export const metadata: Metadata = { title: "Evaluate" };
 import { EvaluateClient } from "@/components/evaluate/EvaluateClient";
 import { getDefaultDashboardSnapshot } from "@/lib/dashboardEngine";
 import { DEFAULT_TZ, todayYmdInTz } from "@/lib/dates";
-import { supabaseServer } from "@/lib/supabaseServer";
+import { getCurrentUser } from "@/lib/auth/currentUser";
 import { getTeamIdForUser } from "@/lib/db/getTeamIdForUser";
 import { getTeamMembers } from "@/lib/db/getTeamMembers";
 import { getWorkItemsForTeam } from "@/lib/db/getWorkItemsForTeam";
 
 export default async function EvaluatePage() {
-  const supabase = await supabaseServer();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   const displayName =
     user?.user_metadata?.display_name ||
     user?.email?.split("@")[0] ||
