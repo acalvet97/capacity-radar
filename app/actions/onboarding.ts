@@ -1,12 +1,13 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import type { ActionResult } from "@/lib/actionResult";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
-export type ActionResult = { ok: true } | { ok: false; message: string };
-
-export async function updateWorkspaceNameAction(name: string): Promise<ActionResult> {
+export async function updateWorkspaceNameAction(
+  name: string
+): Promise<ActionResult> {
   const trimmed = name.trim();
   if (!trimmed) return { ok: false, message: "Team name cannot be empty." };
 

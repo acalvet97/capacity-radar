@@ -15,7 +15,6 @@ interface AskKliraContextValue {
   toggle: () => void;
   messages: EvaluateChatMessage[];
   setMessages: React.Dispatch<React.SetStateAction<EvaluateChatMessage[]>>;
-  clearMessages: () => void;
   /** True while a chat request is in-flight (including streaming). */
   isResponding: boolean;
   setIsResponding: (v: boolean) => void;
@@ -57,7 +56,6 @@ export function AskKliraProvider({
   const open = React.useCallback(() => setIsOpen(true), []);
   const close = React.useCallback(() => setIsOpen(false), []);
   const toggle = React.useCallback(() => setIsOpen((prev) => !prev), []);
-  const clearMessages = React.useCallback(() => setMessages([]), []);
 
   // Close the modal when navigating to /evaluate — the full-page EvaluateClient
   // takes over, preventing two instances from being alive simultaneously.
@@ -91,7 +89,6 @@ export function AskKliraProvider({
         toggle,
         messages,
         setMessages,
-        clearMessages,
         isResponding,
         setIsResponding,
       }}

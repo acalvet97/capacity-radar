@@ -1,6 +1,7 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import type { ActionResult } from "@/lib/actionResult";
+import { revalidateCapacitySurfaces } from "@/lib/revalidate";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { loadTeamCapacityHoursPerCycle } from "@/lib/loadTeamCapacity";
 import { cycleToWeekly } from "@/lib/capacityUnits";
@@ -13,10 +14,6 @@ import {
   validateDailyHours,
 } from "@/lib/dailyHours";
 
-export type UpdateBufferResult = { ok: true } | { ok: false; message: string };
-export type UpdateTeamMembersResult = { ok: true } | { ok: false; message: string };
-export type UpdateReservedCapacityResult = { ok: true } | { ok: false; message: string };
-
 export type TeamMemberUpdate = {
   id: string;
   name?: string | null;
@@ -24,12 +21,6 @@ export type TeamMemberUpdate = {
   /** When true, confirm the schedule even if daily_hours matches the stored row. */
   confirmDailyHours?: boolean;
 };
-
-function revalidateCapacityPaths() {
-  revalidatePath("/dashboard");
-  revalidatePath("/evaluate");
-  revalidatePath("/settings");
-}
 
 /**
  * Update team members: name and/or daily_hours.
@@ -40,7 +31,7 @@ function revalidateCapacityPaths() {
 export async function updateTeamMembersHoursAction(
   teamId: string,
   updates: TeamMemberUpdate[]
-): Promise<UpdateTeamMembersResult> {
+): Promise<ActionResult> {
   if (!updates.length) {
     return { ok: false, message: "No updates provided." };
   }
@@ -91,7 +82,7 @@ export async function updateTeamMembersHoursAction(
     if (error) return { ok: false, message: error.message };
   }
 
-  revalidateCapacityPaths();
+  revalidateCapacitySurfaces();
   return { ok: true };
 }
 
@@ -102,7 +93,7 @@ export async function createTeamMemberAction(
   teamId: string,
   name: string,
   daily_hours: DailyHours
-): Promise<UpdateTeamMembersResult> {
+): Promise<ActionResult> {
   const trimmedName = name.trim() || null;
   const sanitizedHours = sanitizeDailyHours(daily_hours);
   const hoursError = validateDailyHours(sanitizedHours);
@@ -119,7 +110,7 @@ export async function createTeamMemberAction(
   });
   if (error) return { ok: false, message: error.message };
 
-  revalidateCapacityPaths();
+  revalidateCapacitySurfaces();
   return { ok: true };
 }
 
@@ -129,7 +120,7 @@ export async function createTeamMemberAction(
 export async function deleteTeamMemberAction(
   teamId: string,
   memberId: string
-): Promise<UpdateTeamMembersResult> {
+): Promise<ActionResult> {
   const supabase = supabaseAdmin();
   const { error } = await supabase
     .from("team_members")
@@ -138,7 +129,7 @@ export async function deleteTeamMemberAction(
     .eq("team_id", teamId);
   if (error) return { ok: false, message: error.message };
 
-  revalidateCapacityPaths();
+  revalidateCapacitySurfaces();
   return { ok: true };
 }
 
@@ -150,7 +141,7 @@ export async function updateReservedCapacityAction(
   teamId: string,
   enabled: boolean,
   hoursPerWeek: number
-): Promise<UpdateReservedCapacityResult> {
+): Promise<ActionResult> {
   const weeklyCapacity = cycleToWeekly(await loadTeamCapacityHoursPerCycle(teamId));
   const maxHours = Math.round(weeklyCapacity * 2) / 2; // round to 0.5
 
@@ -161,9 +152,7 @@ export async function updateReservedCapacityAction(
       .update({ buffer_hours_per_week: 0 })
       .eq("id", teamId);
     if (error) return { ok: false, message: error.message };
-    revalidatePath("/dashboard");
-    revalidatePath("/evaluate");
-    revalidatePath("/settings");
+    revalidateCapacitySurfaces();
     return { ok: true };
   }
 
@@ -185,45 +174,6 @@ export async function updateReservedCapacityAction(
     .eq("id", teamId);
 
   if (error) return { ok: false, message: error.message };
-  revalidatePath("/dashboard");
-  revalidatePath("/evaluate");
-  revalidatePath("/settings");
-  return { ok: true };
-}
-
-/**
- * Update team's weekly structural buffer (legacy name; used by engine).
- * Validates: buffer >= 0 and buffer <= weekly capacity. Sanitizes to 0.5.
- */
-export async function updateBufferAction(
-  teamId: string,
-  bufferHoursPerWeek: number
-): Promise<UpdateBufferResult> {
-  const sanitized = bufferHoursPerWeek <= 0 ? 0 : sanitizeHoursInput(bufferHoursPerWeek);
-  if (!Number.isFinite(sanitized) || sanitized < 0) {
-    return { ok: false, message: "Reserved capacity must be a non-negative number." };
-  }
-
-  const weeklyCapacity = cycleToWeekly(await loadTeamCapacityHoursPerCycle(teamId));
-  if (sanitized > weeklyCapacity) {
-    return {
-      ok: false,
-      message: `Reserved capacity cannot exceed weekly capacity (${Math.round(weeklyCapacity)}h).`,
-    };
-  }
-
-  const supabase = supabaseAdmin();
-  const { error } = await supabase
-    .from("teams")
-    .update({ buffer_hours_per_week: Math.round(sanitized) })
-    .eq("id", teamId);
-
-  if (error) {
-    return { ok: false, message: error.message };
-  }
-
-  revalidatePath("/dashboard");
-  revalidatePath("/evaluate");
-  revalidatePath("/settings");
+  revalidateCapacitySurfaces();
   return { ok: true };
 }

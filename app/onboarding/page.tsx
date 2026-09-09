@@ -26,7 +26,7 @@ export default async function OnboardingPage() {
   if (team.onboarding_completed) redirect("/dashboard");
 
   const teamId = team.id;
-  const [members, { bufferHoursPerWeek, weeklyCapacity }] = await Promise.all([
+  const [members, { bufferHoursPerWeek }] = await Promise.all([
     getTeamMembers(teamId),
     getTeamBufferAndCapacity(teamId),
   ]);
@@ -37,7 +37,6 @@ export default async function OnboardingPage() {
       initialTeamName={team.name ?? ""}
       initialMembers={members}
       initialBufferHoursPerWeek={bufferHoursPerWeek}
-      initialWeeklyCapacity={weeklyCapacity}
     />
   );
 }

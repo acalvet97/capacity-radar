@@ -1,17 +1,11 @@
 import { supabaseServer } from "@/lib/supabaseServer";
+import type { ImportedWorkItem } from "@/lib/types/importedWorkItem";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { getTeamRowForOwnerAdmin } from "@/lib/db/ensurePersonalTeamForUser";
 import { NextResponse } from "next/server";
 
-type WorkItemInput = {
-  name: string;
-  estimated_hours: number | null;
-  start_date: string | null;
-  deadline: string | null;
-};
-
 type RequestBody = {
-  items: WorkItemInput[];
+  items: ImportedWorkItem[];
   import_source: "ai" | "csv" | "manual";
 };
 

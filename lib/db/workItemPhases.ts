@@ -21,17 +21,3 @@ export type WorkItemPhaseRow = {
 /** Columns selected for a phase, as a PostgREST nested-select fragment. */
 export const WORK_ITEM_PHASE_COLUMNS =
   "id, name, owner_member_id, start_date, deadline, estimated_hours, sort_order";
-
-/**
- * Owner is required in the UI so the allocation preview has a real daily cap.
- * Capacity stacking consumes this curve at read time. A missing owner
- * (cascade) just hides the allocation preview and contributes 0 hours.
- */
-export function phaseOwnerName(
-  phase: WorkItemPhaseRow,
-  members: { id: string; name: string | null }[]
-): string | null {
-  if (!phase.owner_member_id) return null;
-  const member = members.find((m) => m.id === phase.owner_member_id);
-  return member?.name?.trim() || null;
-}

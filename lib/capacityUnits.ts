@@ -14,14 +14,6 @@ export function cycleToWeekly(hoursPerCycle: number): number {
 }
 
 /**
- * Convert weekly capacity to cycle capacity (hours per 4-week cycle) for DB storage.
- */
-export function weeklyToCycle(hoursPerWeek: number): number {
-  if (!Number.isFinite(hoursPerWeek) || hoursPerWeek < 0) return 0;
-  return normalize(hoursPerWeek * BASE_WEEKS_PER_CYCLE);
-}
-
-/**
  * Round to avoid float artifacts (2 decimal places).
  */
 export function normalize(n: number): number {

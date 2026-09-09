@@ -7,17 +7,10 @@ import { Trash2, Plus, Pencil, ArrowRight, ArrowLeft } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { trackWorkItemAdded } from "@/lib/mixpanel";
-
-export type ReviewItem = {
-  id: string;
-  name: string;
-  estimated_hours: number | null;
-  start_date: string | null;
-  deadline: string | null;
-};
+import type { ImportedWorkItemDraft } from "@/lib/types/importedWorkItem";
 
 type Props = {
-  items: ReviewItem[];
+  items: ImportedWorkItemDraft[];
   importSource: "ai" | "csv";
   onBack: () => void;
 };
@@ -27,18 +20,18 @@ function makeId() {
   return `row-${_nextId++}`;
 }
 
-type EditingCell = { rowId: string; field: keyof ReviewItem } | null;
+type EditingCell = { rowId: string; field: keyof ImportedWorkItemDraft } | null;
 
 export function ReviewTable({ items: initialItems, importSource, onBack }: Props) {
   const router = useRouter();
-  const [rows, setRows] = React.useState<ReviewItem[]>(() =>
+  const [rows, setRows] = React.useState<ImportedWorkItemDraft[]>(() =>
     initialItems.map((item) => ({ ...item, id: makeId() }))
   );
   const [editingCell, setEditingCell] = React.useState<EditingCell>(null);
   const [editValue, setEditValue] = React.useState("");
   const [isPending, startTransition] = React.useTransition();
 
-  function startEdit(rowId: string, field: keyof ReviewItem, currentValue: string) {
+  function startEdit(rowId: string, field: keyof ImportedWorkItemDraft, currentValue: string) {
     setEditingCell({ rowId, field });
     setEditValue(currentValue);
   }
@@ -115,7 +108,7 @@ export function ReviewTable({ items: initialItems, importSource, onBack }: Props
     });
   }
 
-  function renderCell(row: ReviewItem, field: keyof ReviewItem) {
+  function renderCell(row: ImportedWorkItemDraft, field: keyof ImportedWorkItemDraft) {
     const isEditing = editingCell?.rowId === row.id && editingCell?.field === field;
     const value =
       field === "estimated_hours"

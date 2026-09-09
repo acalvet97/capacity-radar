@@ -65,7 +65,7 @@ export function NotificationBell({ initialNotifications }: Props) {
 
     const ids = notification.payload?.work_item_ids ?? [];
     if (ids.length > 0) {
-      router.push(`/work-items?highlight=${ids.join(",")}`);
+      router.push(`/committed-work?highlight=${ids.join(",")}`);
     }
   }
 

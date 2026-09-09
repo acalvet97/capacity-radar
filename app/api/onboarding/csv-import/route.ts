@@ -1,13 +1,7 @@
 import { supabaseServer } from "@/lib/supabaseServer";
+import type { ImportedWorkItem } from "@/lib/types/importedWorkItem";
 import { NextResponse } from "next/server";
 import * as XLSX from "xlsx";
-
-export type ParsedWorkItem = {
-  name: string;
-  estimated_hours: number | null;
-  start_date: string | null;
-  deadline: string | null;
-};
 
 /**
  * Normalise a date cell value to ISO 8601 (YYYY-MM-DD).
@@ -114,7 +108,7 @@ export async function POST(request: Request) {
   }
 
   const today = new Date().toISOString().split("T")[0];
-  const items: ParsedWorkItem[] = [];
+  const items: ImportedWorkItem[] = [];
 
   for (let i = 1; i < rows.length; i++) {
     const row = rows[i] as unknown[];

@@ -19,18 +19,15 @@ import {
   ItemTitle,
   ItemDescription,
 } from "@/components/ui/item";
-import { ReviewTable, type ReviewItem } from "./ReviewTable";
+import { ReviewTable } from "./ReviewTable";
+import type { ImportedWorkItemDraft } from "@/lib/types/importedWorkItem";
 
 type Method = "picker" | "ai" | "csv" | "review-ai" | "review-csv";
 
-type Props = {
-  teamId: string;
-};
-
-export function Step3LoadWork({ teamId: _teamId }: Props) {
+export function Step3LoadWork() {
   const router = useRouter();
   const [view, setView] = React.useState<Method>("picker");
-  const [reviewItems, setReviewItems] = React.useState<ReviewItem[]>([]);
+  const [reviewItems, setReviewItems] = React.useState<ImportedWorkItemDraft[]>([]);
   const [importSource, setImportSource] = React.useState<"ai" | "csv">("ai");
 
   // AI import state
@@ -74,7 +71,7 @@ export function Step3LoadWork({ teamId: _teamId }: Props) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "AI import failed");
       setReviewItems(
-        (data as ReviewItem[]).map((item, i) => ({ ...item, id: `ai-${i}` }))
+        (data as ImportedWorkItemDraft[]).map((item, i) => ({ ...item, id: `ai-${i}` }))
       );
       setImportSource("ai");
       setView("review-ai");
@@ -112,7 +109,7 @@ export function Step3LoadWork({ teamId: _teamId }: Props) {
         return;
       }
       setReviewItems(
-        (data as ReviewItem[]).map((item, i) => ({ ...item, id: `csv-${i}` }))
+        (data as ImportedWorkItemDraft[]).map((item, i) => ({ ...item, id: `csv-${i}` }))
       );
       setImportSource("csv");
       setView("review-csv");

@@ -51,11 +51,6 @@ export type StackingWorkItem = {
   phases: WorkItemPhaseRow[];
 };
 
-export type MemberRemaining = {
-  memberId: string;
-  remainingHours: number;
-};
-
 export type HypotheticalAdditionResult = {
   leftoverHours: number;
   overCapacityDays: OverCapacityDay[];

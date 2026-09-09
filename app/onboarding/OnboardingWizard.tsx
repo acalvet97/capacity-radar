@@ -13,7 +13,6 @@ type Props = {
   initialTeamName: string;
   initialMembers: TeamMemberRow[];
   initialBufferHoursPerWeek: number;
-  initialWeeklyCapacity: number;
 };
 
 export function OnboardingWizard({
@@ -21,7 +20,6 @@ export function OnboardingWizard({
   initialTeamName,
   initialMembers,
   initialBufferHoursPerWeek,
-  initialWeeklyCapacity,
 }: Props) {
   const [step, setStep] = React.useState(1);
 
@@ -97,12 +95,11 @@ export function OnboardingWizard({
             teamId={teamId}
             initialMembers={initialMembers}
             initialBufferHoursPerWeek={initialBufferHoursPerWeek}
-            initialWeeklyCapacity={initialWeeklyCapacity}
             onContinue={() => setStep(3)}
           />
         )}
         {step === 3 && (
-          <Step3LoadWork teamId={teamId} />
+          <Step3LoadWork />
         )}
       </div>
     </div>

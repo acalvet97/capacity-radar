@@ -1,7 +1,8 @@
 // app/actions/phases.ts
 "use server";
 
-import { revalidatePath } from "next/cache";
+import type { ActionResult } from "@/lib/actionResult";
+import { revalidateWorkSurfaces } from "@/lib/revalidate";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { isValidYmd } from "@/lib/dates";
 import { sanitizeHoursInput } from "@/lib/hours";
@@ -16,16 +17,6 @@ import type { WorkItemPhaseRow } from "@/lib/db/workItemPhases";
  * The RPCs are SECURITY INVOKER, so RLS still scopes every call to work items
  * on a team the caller owns -- there is no teamId argument to spoof.
  */
-
-type ActionResult<T = undefined> =
-  | ({ ok: true } & (T extends undefined ? object : T))
-  | { ok: false; message: string };
-
-function revalidateWorkSurfaces() {
-  revalidatePath("/dashboard");
-  revalidatePath("/evaluate");
-  revalidatePath("/committed-work");
-}
 
 type PhaseFields = {
   name: string;

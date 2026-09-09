@@ -31,7 +31,6 @@ type Props = {
   teamId: string;
   initialMembers: TeamMemberRow[];
   initialBufferHoursPerWeek: number;
-  initialWeeklyCapacity: number;
   onContinue: () => void;
 };
 

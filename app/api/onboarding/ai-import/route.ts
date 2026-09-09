@@ -1,17 +1,11 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { supabaseServer } from "@/lib/supabaseServer";
+import type { ImportedWorkItem } from "@/lib/types/importedWorkItem";
 import { NextResponse } from "next/server";
 
 export const maxDuration = 60;
 
 const MODEL = process.env.ANTHROPIC_MODEL ?? "claude-sonnet-4-20250514";
-
-export type ParsedWorkItem = {
-  name: string;
-  estimated_hours: number | null;
-  start_date: string | null;
-  deadline: string | null;
-};
 
 export async function POST(request: Request) {
   const supabase = await supabaseServer();
@@ -76,7 +70,7 @@ Return null only for deadline if not mentioned or not inferable.`;
     .replace(/\s*```$/, "")
     .trim();
 
-  let parsed: ParsedWorkItem[];
+  let parsed: ImportedWorkItem[];
   try {
     const data = JSON.parse(cleaned);
     if (!Array.isArray(data)) {

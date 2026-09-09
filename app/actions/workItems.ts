@@ -1,7 +1,8 @@
 // app/actions/workItems.ts
 "use server";
 
-import { revalidatePath } from "next/cache";
+import type { ActionResult } from "@/lib/actionResult";
+import { revalidateWorkSurfaces } from "@/lib/revalidate";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { isValidYmd } from "@/lib/dates";
 
@@ -21,9 +22,7 @@ export async function deleteWorkItemAction(input: {
     return { ok: false as const, message: error.message };
   }
 
-  revalidatePath("/dashboard");
-  revalidatePath("/evaluate");
-  revalidatePath("/committed-work");
+  revalidateWorkSurfaces();
 
   return { ok: true as const };
 }
@@ -43,10 +42,7 @@ type UpdateWorkItemInput = {
 
 export async function updateWorkItemAction(
   input: UpdateWorkItemInput
-): Promise<
-  | { ok: true; item: { id: string } }
-  | { ok: false; message: string }
-> {
+): Promise<ActionResult<{ item: { id: string } }>> {
   const supabase = await supabaseServer();
 
   const name = input.name?.trim() ?? "";
@@ -111,9 +107,7 @@ export async function updateWorkItemAction(
     return { ok: false, message: `Update failed: ${error.message}` };
   }
 
-  revalidatePath("/dashboard");
-  revalidatePath("/evaluate");
-  revalidatePath("/committed-work");
+  revalidateWorkSurfaces();
 
   return { ok: true, item: { id: input.workItemId } };
 }
