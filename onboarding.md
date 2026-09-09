@@ -118,7 +118,7 @@ Request body:
 ```
 
 Implementation:
-- Call the Anthropic Claude API (use `claude-sonnet-4-20250514`)
+- Call the Anthropic Claude API (use `claude-sonnet-5`)
 - Use this system prompt:
 
 ```

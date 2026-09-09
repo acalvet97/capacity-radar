@@ -21,7 +21,7 @@ import { DEFAULT_TZ, todayYmdInTz } from "@/lib/dates";
 
 export const maxDuration = 60;
 
-const MODEL = process.env.ANTHROPIC_MODEL ?? "claude-sonnet-4-20250514";
+const MODEL = process.env.ANTHROPIC_MODEL ?? "claude-sonnet-5";
 
 // What the AI outputs between its prose and the structured JSON.
 // This is NOT the same as STREAM_DELIMITER — see section 4.5 of the PRD.
@@ -211,13 +211,19 @@ export async function POST(req: Request) {
         controller.enqueue(encoder.encode(STREAM_DELIMITER + JSON.stringify(out)));
       } catch (err) {
         const fallback: EvaluateChatApiResponse = {
-          message: "I'm having trouble with that. Could you try again?",
+          message: "",
           intent: "ambiguous",
           extractedParams: null,
           readyToEvaluate: false,
           action: null,
         };
         try {
+          // The client renders text before the delimiter, so the apology has to
+          // be streamed as prose like the success path does. Putting it in the
+          // JSON instead leaves nothing to render and leaks the raw payload.
+          controller.enqueue(
+            encoder.encode("I'm having trouble with that. Could you try again?")
+          );
           controller.enqueue(
             encoder.encode(STREAM_DELIMITER + JSON.stringify(fallback))
           );

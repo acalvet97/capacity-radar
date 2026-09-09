@@ -5,7 +5,7 @@ import { NextResponse } from "next/server";
 
 export const maxDuration = 60;
 
-const MODEL = process.env.ANTHROPIC_MODEL ?? "claude-sonnet-4-20250514";
+const MODEL = process.env.ANTHROPIC_MODEL ?? "claude-sonnet-5";
 
 export async function POST(request: Request) {
   const supabase = await supabaseServer();
