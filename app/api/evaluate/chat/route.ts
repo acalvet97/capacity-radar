@@ -12,7 +12,7 @@ import {
   buildSnapshotDigest,
   buildSystemPrompt,
 } from "@/lib/evaluateChatServer";
-import { getDashboardSnapshotFromDb } from "@/lib/dashboardEngine";
+import { getDefaultDashboardSnapshot } from "@/lib/dashboardEngine";
 import { getTeamIdForUser } from "@/lib/db/getTeamIdForUser";
 import { getTeamMembers } from "@/lib/db/getTeamMembers";
 import { getWorkItemsForTeam } from "@/lib/db/getWorkItemsForTeam";
@@ -112,14 +112,8 @@ export async function POST(req: Request) {
   let snapshotDigestText: string;
   try {
     const teamId = await getTeamIdForUser();
-    const snapshot = await getDashboardSnapshotFromDb(teamId, {
-      startYmd: todayYmd,
-      weeks: 26,
-      maxWeeks: 26,
-      locale: "en-GB",
-      tz: DEFAULT_TZ,
-    });
-    const [members, workItems] = await Promise.all([
+    const [snapshot, members, workItems] = await Promise.all([
+      getDefaultDashboardSnapshot(teamId, todayYmd),
       getTeamMembers(teamId),
       getWorkItemsForTeam(teamId),
     ]);
