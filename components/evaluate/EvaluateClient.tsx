@@ -621,7 +621,7 @@ export function EvaluateClient({
 
   const [resultFlashKey, setResultFlashKey] = useState(0);
   const [commitSuccess, setCommitSuccess] = useState(false);
-  const hoursDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const evalDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const threadRef = useRef<HTMLDivElement>(null);
   const chatInputRef = useRef<HTMLTextAreaElement>(null);
   const emptyInputRef = useRef<HTMLTextAreaElement>(null);
@@ -741,10 +741,10 @@ export function EvaluateClient({
     [snapshot, stacking]
   );
 
-  const scheduleHoursDebouncedEval = useCallback(() => {
-    if (hoursDebounceRef.current) clearTimeout(hoursDebounceRef.current);
-    hoursDebounceRef.current = setTimeout(() => {
-      hoursDebounceRef.current = null;
+  const scheduleDebouncedEval = useCallback(() => {
+    if (evalDebounceRef.current) clearTimeout(evalDebounceRef.current);
+    evalDebounceRef.current = setTimeout(() => {
+      evalDebounceRef.current = null;
       const f = formFieldsRef.current;
       runSilentEvaluationAndUpdateMessage({
         name: f.name,
@@ -758,7 +758,7 @@ export function EvaluateClient({
 
   useEffect(() => {
     return () => {
-      if (hoursDebounceRef.current) clearTimeout(hoursDebounceRef.current);
+      if (evalDebounceRef.current) clearTimeout(evalDebounceRef.current);
     };
   }, []);
 
@@ -770,38 +770,13 @@ export function EvaluateClient({
       if (patch.deadlineYmd !== undefined) setDeadlineYmd(patch.deadlineYmd ?? "");
       if (patch.allocationMode !== undefined) setAllocationMode(patch.allocationMode);
 
-      const nextName = patch.name ?? name;
-      const nextHours =
-        patch.totalHours !== undefined ? String(patch.totalHours) : hours;
-      const nextStart = patch.startYmd ?? startYmd;
-      const nextDeadline =
-        patch.deadlineYmd !== undefined
-          ? patch.deadlineYmd ?? ""
-          : deadlineYmd;
-      const nextAlloc = patch.allocationMode ?? allocationMode;
-
-      if (patch.totalHours !== undefined) {
-        scheduleHoursDebouncedEval();
-        return;
-      }
-
-      runSilentEvaluationAndUpdateMessage({
-        name: nextName,
-        hours: nextHours,
-        startYmd: nextStart,
-        deadlineYmd: nextDeadline,
-        allocationMode: nextAlloc,
-      });
+      // Every field debounces, not just hours: re-evaluating synchronously runs
+      // buildOverCapacityScenarios (~45 engine passes per member) on each
+      // keystroke in the title. The setters above land in formFieldsRef during
+      // the re-render, well inside the 300ms window.
+      scheduleDebouncedEval();
     },
-    [
-      allocationMode,
-      deadlineYmd,
-      hours,
-      name,
-      runSilentEvaluationAndUpdateMessage,
-      scheduleHoursDebouncedEval,
-      startYmd,
-    ]
+    [scheduleDebouncedEval]
   );
 
   const applyScenario = useCallback(
