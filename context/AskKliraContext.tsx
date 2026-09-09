@@ -80,19 +80,25 @@ export function AskKliraProvider({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [toggle, pathname, snapshot]);
 
+  // The callbacks are already stable, but a fresh object literal here would
+  // re-render every consumer -- including the full-page EvaluateClient -- on
+  // each provider render.
+  const value = React.useMemo(
+    () => ({
+      isOpen,
+      open,
+      close,
+      toggle,
+      messages,
+      setMessages,
+      isResponding,
+      setIsResponding,
+    }),
+    [isOpen, open, close, toggle, messages, isResponding]
+  );
+
   return (
-    <AskKliraContext.Provider
-      value={{
-        isOpen,
-        open,
-        close,
-        toggle,
-        messages,
-        setMessages,
-        isResponding,
-        setIsResponding,
-      }}
-    >
+    <AskKliraContext.Provider value={value}>
       {children}
       {isOpen && snapshot && (
         <AskKliraModal

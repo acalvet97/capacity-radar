@@ -1,5 +1,6 @@
 "use client";
 
+import * as React from "react";
 import { Input } from "@/components/ui/input";
 import { formatHoursForDisplay, HOURS_STEP } from "@/lib/hours";
 import {
@@ -15,14 +16,18 @@ import {
 } from "@/lib/dailyHours";
 
 type Props = {
+  /** Identifies which row a change belongs to, so callers can pass one stable
+   *  handler for every row instead of a fresh closure per row. */
+  rowIndex: number;
   value: DailyHoursInput;
-  onChange: (day: DayKey, raw: string) => void;
-  onBlurDay: (day: DayKey) => void;
+  onChange: (rowIndex: number, day: DayKey, raw: string) => void;
+  onBlurDay: (rowIndex: number, day: DayKey) => void;
   disabled?: boolean;
   idPrefix: string;
 };
 
-export function DailyHoursInputs({
+function DailyHoursInputsImpl({
+  rowIndex,
   value,
   onChange,
   onBlurDay,
@@ -53,8 +58,8 @@ export function DailyHoursInputs({
                 step={HOURS_STEP}
                 inputMode="decimal"
                 value={value[day]}
-                onChange={(e) => onChange(day, e.target.value)}
-                onBlur={() => onBlurDay(day)}
+                onChange={(e) => onChange(rowIndex, day, e.target.value)}
+                onBlur={() => onBlurDay(rowIndex, day)}
                 disabled={disabled}
                 aria-label={`${DAY_ARIA_LABELS[day]} hours`}
                 aria-invalid={allZero || undefined}
@@ -76,3 +81,9 @@ export function DailyHoursInputs({
     </div>
   );
 }
+
+/**
+ * Memoized: members state lives at the section root, so without this one digit
+ * typed in any row re-renders every member's seven inputs.
+ */
+export const DailyHoursInputs = React.memo(DailyHoursInputsImpl);

@@ -33,26 +33,41 @@ const dataNavItems = [
 
 const SIDEBAR_WIDTH = "16rem";
 
+/**
+ * Module scope, not the render body: a component declared inside AppSidebar is
+ * a new type on every render, so React unmounts and remounts the whole nav
+ * subtree each time usePathname changes -- i.e. on every navigation.
+ */
+function NavItem({
+  label,
+  href,
+  icon: Icon,
+  isActive,
+}: {
+  label: string;
+  href: string;
+  icon: React.ElementType;
+  isActive: boolean;
+}) {
+  return (
+    <SidebarMenuItem>
+      <SidebarMenuButton
+        asChild
+        isActive={isActive}
+        className="rounded-sm px-3 py-2"
+      >
+        <Link href={href}>
+          <Icon className="size-4 shrink-0" />
+          <span>{label}</span>
+        </Link>
+      </SidebarMenuButton>
+    </SidebarMenuItem>
+  );
+}
+
 export function AppSidebar({ user }: { user: NavUserData }) {
   const pathname = usePathname();
   const shortcutLabel = useShortcutLabel();
-
-  function NavItem({ label, href, icon: Icon }: { label: string; href: string; icon: React.ElementType }) {
-    return (
-      <SidebarMenuItem>
-        <SidebarMenuButton
-          asChild
-          isActive={pathname === href}
-          className="rounded-sm px-3 py-2"
-        >
-          <Link href={href}>
-            <Icon className="size-4 shrink-0" />
-            <span>{label}</span>
-          </Link>
-        </SidebarMenuButton>
-      </SidebarMenuItem>
-    );
-  }
 
   return (
     <div
@@ -105,7 +120,11 @@ export function AppSidebar({ user }: { user: NavUserData }) {
           <SidebarGroup className="py-0">
             <SidebarMenu className="px-0">
               {dataNavItems.map((item) => (
-                <NavItem key={item.href} {...item} />
+                <NavItem
+                  key={item.href}
+                  {...item}
+                  isActive={pathname === item.href}
+                />
               ))}
             </SidebarMenu>
           </SidebarGroup>
@@ -115,7 +134,12 @@ export function AppSidebar({ user }: { user: NavUserData }) {
           {/* Settings */}
           <SidebarGroup className="py-0">
             <SidebarMenu className="px-0">
-              <NavItem label="Settings" href="/settings" icon={Settings} />
+              <NavItem
+                label="Settings"
+                href="/settings"
+                icon={Settings}
+                isActive={pathname === "/settings"}
+              />
             </SidebarMenu>
           </SidebarGroup>
         </SidebarContent>

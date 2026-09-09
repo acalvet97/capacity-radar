@@ -76,7 +76,9 @@ export function Step2TeamSetup({
     });
   }
 
-  function handleDayChange(index: number, day: DayKey, raw: string) {
+  // Functional setMembers means these never close over members, so they stay
+  // stable for the life of the section and DailyHoursInputs' memo holds.
+  const handleDayChange = React.useCallback((index: number, day: DayKey, raw: string) => {
     setMembers((prev) => {
       const next = [...prev];
       next[index] = {
@@ -85,9 +87,9 @@ export function Step2TeamSetup({
       };
       return next;
     });
-  }
+  }, []);
 
-  function handleDayBlur(index: number, day: DayKey) {
+  const handleDayBlur = React.useCallback((index: number, day: DayKey) => {
     setMembers((prev) => {
       const next = [...prev];
       const sanitized = formatHoursForDisplay(
@@ -99,7 +101,7 @@ export function Step2TeamSetup({
       };
       return next;
     });
-  }
+  }, []);
 
   function handleAddMember() {
     setMembers((prev) => [...prev, newMemberRow(`new-${++nextNewIdRef.current}`)]);
@@ -254,10 +256,11 @@ export function Step2TeamSetup({
                   </td>
                   <td className="px-3 py-2">
                     <DailyHoursInputs
+                      rowIndex={index}
                       idPrefix={`onboarding-member-${m.id}`}
                       value={m.dailyHours}
-                      onChange={(day, raw) => handleDayChange(index, day, raw)}
-                      onBlurDay={(day) => handleDayBlur(index, day)}
+                      onChange={handleDayChange}
+                      onBlurDay={handleDayBlur}
                       disabled={isPending}
                     />
                   </td>
