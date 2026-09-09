@@ -1,6 +1,22 @@
-import mixpanel from "mixpanel-browser";
+type Mixpanel = typeof import("mixpanel-browser").default;
 
 let initialized = false;
+let mixpanelPromise: Promise<Mixpanel> | null = null;
+
+/**
+ * Loaded on demand rather than imported at module scope: MixpanelProvider is
+ * mounted in the root layout, so a static import puts the whole library in
+ * every route's first-load JS to run one call in a mount effect.
+ *
+ * Callers share this promise, so tracking that fires before init resolves still
+ * runs after it -- the init callback is registered first.
+ */
+function loadMixpanel(): Promise<Mixpanel> {
+  if (!mixpanelPromise) {
+    mixpanelPromise = import("mixpanel-browser").then((m) => m.default);
+  }
+  return mixpanelPromise;
+}
 
 /**
  * Call once in the browser (e.g. from `MixpanelProvider`).
@@ -22,25 +38,33 @@ export function initMixpanel(): void {
     return;
   }
   if (initialized) return;
+  // Set before awaiting so a second call during the import can't double-init.
+  initialized = true;
 
   const apiHost = process.env.NEXT_PUBLIC_MIXPANEL_API_HOST;
 
-  mixpanel.init(token, {
-    // Omit api_host to use the default US API (matches most projects).
-    // EU-only projects: set NEXT_PUBLIC_MIXPANEL_API_HOST=https://api-eu.mixpanel.com
-    ...(apiHost ? { api_host: apiHost } : {}),
-    autocapture: true,
-    record_sessions_percent: 100,
-    persistence: "localStorage",
-    debug: process.env.NODE_ENV === "development",
-  });
-  initialized = true;
+  void loadMixpanel()
+    .then((mixpanel) => {
+      mixpanel.init(token, {
+        // Omit api_host to use the default US API (matches most projects).
+        // EU-only projects: set NEXT_PUBLIC_MIXPANEL_API_HOST=https://api-eu.mixpanel.com
+        ...(apiHost ? { api_host: apiHost } : {}),
+        autocapture: true,
+        record_sessions_percent: 100,
+        persistence: "localStorage",
+        debug: process.env.NODE_ENV === "development",
+      });
 
-  // Verifies the pipeline without relying only on autocapture / Live view delay
-  mixpanel.track("App initialized", {
-    path: window.location.pathname,
-    $current_url: window.location.href,
-  });
+      // Verifies the pipeline without relying only on autocapture / Live view delay
+      mixpanel.track("App initialized", {
+        path: window.location.pathname,
+        $current_url: window.location.href,
+      });
+    })
+    .catch(() => {
+      // Analytics must never break the app; allow a later retry.
+      initialized = false;
+    });
 }
 
 export type TrackWorkItemAddedPayload =
@@ -65,7 +89,9 @@ export function trackWorkItemAdded(payload: TrackWorkItemAddedPayload): void {
   if (typeof window === "undefined") return;
   if (!process.env.NEXT_PUBLIC_MIXPANEL_TOKEN) return;
 
-  mixpanel.track("Work Item Added", payload);
+  void loadMixpanel()
+    .then((mixpanel) => mixpanel.track("Work Item Added", payload))
+    .catch(() => {
+      // Analytics must never break a save that already succeeded.
+    });
 }
-
-export { mixpanel };

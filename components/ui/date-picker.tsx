@@ -3,10 +3,23 @@
 import * as React from "react";
 import { CalendarIcon, X } from "lucide-react";
 import { format, parse, isValid } from "date-fns";
-import { Calendar } from "@/components/ui/calendar";
+import dynamic from "next/dynamic";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+
+/**
+ * react-day-picker only renders inside the popover, which is unmounted until
+ * opened -- and PhaseList puts two of these per phase row. Loading it on open
+ * keeps it out of the initial bundle.
+ */
+const Calendar = dynamic(
+  () => import("@/components/ui/calendar").then((m) => m.Calendar),
+  {
+    ssr: false,
+    loading: () => <div className="h-[300px] w-[280px]" />,
+  }
+);
 
 /** Parse a YYYY-MM-DD string to a Date (local time, no UTC shift). */
 function ymdToDate(ymd: string): Date | undefined {
