@@ -36,27 +36,42 @@ export async function updateTeamMembersHoursAction(
     return { ok: false, message: "No updates provided." };
   }
 
-  const supabase = supabaseAdmin();
+  // Validate everything before touching the database, so a bad row in the
+  // middle of the set can't leave the earlier ones already written.
+  const sanitized = new Map<string, DailyHours>();
   for (const u of updates) {
-    const sanitizedHours = sanitizeDailyHours(u.daily_hours);
-    const hoursError = validateDailyHours(sanitizedHours);
+    const hours = sanitizeDailyHours(u.daily_hours);
+    const hoursError = validateDailyHours(hours);
     if (hoursError) {
       return { ok: false, message: hoursError };
     }
+    sanitized.set(u.id, hours);
+  }
 
-    const { data: existing, error: fetchError } = await supabase
-      .from("team_members")
-      .select("daily_hours")
-      .eq("id", u.id)
-      .eq("team_id", teamId)
-      .maybeSingle();
-    if (fetchError) return { ok: false, message: fetchError.message };
-    if (!existing) {
+  const supabase = supabaseAdmin();
+
+  // One read for the whole set: this used to be a select *and* an update per
+  // member, so saving eight members cost sixteen sequential round trips.
+  const { data: existingRows, error: fetchError } = await supabase
+    .from("team_members")
+    .select("id, daily_hours")
+    .eq("team_id", teamId)
+    .in("id", updates.map((u) => u.id));
+  if (fetchError) return { ok: false, message: fetchError.message };
+
+  const storedById = new Map(
+    (existingRows ?? []).map((row) => [row.id, parseDailyHours(row.daily_hours)])
+  );
+
+  const writes: { id: string; payload: Record<string, unknown> }[] = [];
+  for (const u of updates) {
+    const stored = storedById.get(u.id);
+    if (!stored) {
       return { ok: false, message: "Team member not found." };
     }
 
-    const storedHours = parseDailyHours(existing.daily_hours);
-    const hoursChanged = !dailyHoursEqual(sanitizedHours, storedHours);
+    const sanitizedHours = sanitized.get(u.id)!;
+    const hoursChanged = !dailyHoursEqual(sanitizedHours, stored);
 
     const payload: {
       name?: string | null;
@@ -74,13 +89,22 @@ export async function updateTeamMembersHoursAction(
     }
     if (Object.keys(payload).length === 0) continue;
 
-    const { error } = await supabase
-      .from("team_members")
-      .update(payload)
-      .eq("id", u.id)
-      .eq("team_id", teamId);
-    if (error) return { ok: false, message: error.message };
+    writes.push({ id: u.id, payload });
   }
+
+  // Each row needs its own payload, so these stay separate statements -- but
+  // they are independent, so they go out together rather than one at a time.
+  const results = await Promise.all(
+    writes.map(({ id, payload }) =>
+      supabase
+        .from("team_members")
+        .update(payload)
+        .eq("id", id)
+        .eq("team_id", teamId)
+    )
+  );
+  const failed = results.find((r) => r.error);
+  if (failed?.error) return { ok: false, message: failed.error.message };
 
   revalidateCapacitySurfaces();
   return { ok: true };

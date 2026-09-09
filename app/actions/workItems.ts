@@ -50,28 +50,29 @@ export async function updateWorkItemAction(
     return { ok: false, message: "Name is required." };
   }
 
-  const { count: phaseCount, error: phaseCountError } = await supabase
-    .from("work_item_phases")
-    .select("id", { count: "exact", head: true })
-    .eq("work_item_id", input.workItemId);
-
-  if (phaseCountError) {
-    return {
-      ok: false,
-      message: `Update failed: ${phaseCountError.message}`,
-    };
-  }
-
-  const hasPhases = (phaseCount ?? 0) > 0;
-
   // Hours are owned by phases. Reject an explicit total rather than silently
-  // dropping it, including on a stub that does not have phases yet.
+  // dropping it, including on a stub that does not have phases yet. The count
+  // only picks which message to show, so it stays inside this branch -- every
+  // normal save used to pay for it and discard the result.
   if (input.estimatedHours !== undefined) {
+    const { count: phaseCount, error: phaseCountError } = await supabase
+      .from("work_item_phases")
+      .select("id", { count: "exact", head: true })
+      .eq("work_item_id", input.workItemId);
+
+    if (phaseCountError) {
+      return {
+        ok: false,
+        message: `Update failed: ${phaseCountError.message}`,
+      };
+    }
+
     return {
       ok: false,
-      message: hasPhases
-        ? "Estimated hours are derived from this work item's phases. Edit the phase hours instead."
-        : "Add a phase to set this work item's hours.",
+      message:
+        (phaseCount ?? 0) > 0
+          ? "Estimated hours are derived from this work item's phases. Edit the phase hours instead."
+          : "Add a phase to set this work item's hours.",
     };
   }
 

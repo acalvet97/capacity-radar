@@ -68,16 +68,27 @@ export async function deleteAccount() {
     .select('id, company_id')
     .eq('owner_user_id', user.id);
 
-  const companyIds = new Set<string>();
-  for (const team of teams ?? []) {
-    await admin.from('work_items').delete().eq('team_id', team.id);
-    await admin.from('team_members').delete().eq('team_id', team.id);
-    await admin.from('team_work_type_settings').delete().eq('team_id', team.id);
-    await admin.from('teams').delete().eq('id', team.id);
-    if (team.company_id) companyIds.add(team.company_id);
+  const teamIds = (teams ?? []).map((team) => team.id);
+  const companyIds = [
+    ...new Set(
+      (teams ?? [])
+        .map((team) => team.company_id)
+        .filter((id): id is string => Boolean(id))
+    ),
+  ];
+
+  if (teamIds.length > 0) {
+    // Children first, since they reference the team. They don't reference each
+    // other, so they go out together instead of one table per team at a time.
+    await Promise.all([
+      admin.from('work_items').delete().in('team_id', teamIds),
+      admin.from('team_members').delete().in('team_id', teamIds),
+      admin.from('team_work_type_settings').delete().in('team_id', teamIds),
+    ]);
+    await admin.from('teams').delete().in('id', teamIds);
   }
-  for (const companyId of companyIds) {
-    await admin.from('companies').delete().eq('id', companyId);
+  if (companyIds.length > 0) {
+    await admin.from('companies').delete().in('id', companyIds);
   }
 
   await admin.auth.admin.deleteUser(user.id);

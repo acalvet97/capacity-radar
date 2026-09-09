@@ -26,6 +26,7 @@ import {
 } from "@/lib/dashboardConstants";
 import { DEFAULT_TZ, todayYmdInTz, formatDateDdMmYyyy } from "@/lib/dates";
 import { normalizeViewSearchParam, weeksForHorizonView } from "@/lib/horizonView";
+import { after } from "next/server";
 import { checkAndCreateStalenessNotification } from "@/lib/notifications";
 
 function daysUntil(deadlineYmd: string, todayYmd: string): number {
@@ -48,8 +49,15 @@ export default async function DashboardPage({
 
   const teamId = await getTeamIdForUser();
 
-  // Fire-and-forget: check for stale work items and create notification if needed
-  checkAndCreateStalenessNotification(teamId).catch(() => {});
+  // Runs after the response is sent: this writes a notification and costs three
+  // round trips, so it has no business blocking (or outliving) the render.
+  after(async () => {
+    try {
+      await checkAndCreateStalenessNotification(teamId);
+    } catch {
+      // A missed notification must never surface as a dashboard error.
+    }
+  });
 
   const [fullSnapshot, workItems, teamMembers] = await Promise.all([
     getDefaultDashboardSnapshot(teamId, todayYmd),

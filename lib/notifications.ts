@@ -5,17 +5,18 @@ import {
   utcDateToYmd,
   ymdToUtcDate,
 } from "@/lib/dates";
+import { getCurrentUser } from "@/lib/auth/currentUser";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
-import { supabaseServer } from "@/lib/supabaseServer";
 
 /**
  * Checks for stale work items (deadline within 7 days, never updated since creation).
  * If found and no notification created today, inserts a new 'deadline_this_week' notification.
- * Called on every dashboard load.
+ *
+ * Costs three round trips and an insert, so callers should run it via after()
+ * rather than in the render path.
  */
 export async function checkAndCreateStalenessNotification(teamId: string): Promise<void> {
-  const supabase = await supabaseServer();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   if (!user) return;
 
   const admin = supabaseAdmin();
